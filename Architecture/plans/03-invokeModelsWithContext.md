@@ -69,3 +69,28 @@ User: {{message}}
 - Gọi model thành công với request hợp lệ.
 - Có mapping lỗi nhất quán cho timeout/provider/empty output.
 - Unit test pass cho 3 nhóm case chính.
+
+## 11) API liên quan
+
+### LangChain APIs
+- `ChatPromptTemplate.from_messages(...)`: build prompt từ system + user message.
+- `ChatOpenAI(model=..., temperature=...)` (hoặc provider tương đương): tạo model client.
+- `llm.invoke(messages)`: gọi model non-streaming.
+
+Ví dụ luồng gọi tối thiểu:
+```python
+prompt = ChatPromptTemplate.from_messages([
+	("system", "Bạn là trợ lý AI hữu ích, trả lời ngắn gọn."),
+	("human", "{message}")
+])
+messages = prompt.format_messages(message=normalized_request.message)
+result = llm.invoke(messages)
+```
+
+### Service API nội bộ
+- `invokeModelsWithContext(normalized: NormalizedRequest) -> ModelResult`
+
+### LangGraph node (nếu dùng graph)
+- Node tên `invoke_model`.
+- Input state: `normalized_request`.
+- Output state thêm: `model_result` hoặc `error`.

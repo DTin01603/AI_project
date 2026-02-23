@@ -66,3 +66,25 @@ return { raw_message: msg, locale, channel, received_at }
 - Hàm trả về payload đúng schema đã định nghĩa.
 - Tất cả case validate lỗi trả về mã lỗi nhất quán.
 - Unit test xanh cho 4 nhóm case trên.
+
+## 10) API liên quan
+
+### FastAPI
+- Dùng body model `ChatRequest` cho endpoint `POST /chat`.
+- Validate ở ranh giới API trước khi vào pipeline.
+
+Ví dụ schema:
+```python
+class ChatRequest(BaseModel):
+	message: str
+	locale: str | None = "vi-VN"
+	channel: str | None = "web"
+```
+
+### Service API nội bộ
+- `captureQuestion(payload: ChatRequest | dict) -> CapturedQuestion`
+
+### LangGraph node (nếu dùng graph)
+- Node tên `capture_question`.
+- Input state tối thiểu: `message`, `locale`, `channel`.
+- Output state thêm: `captured_question`.

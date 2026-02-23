@@ -70,3 +70,30 @@
 ## 8) Definition of Done
 - UI có thể render được cả 2 trạng thái success/error không cần if-else phức tạp.
 - Response schema ổn định và backward-compatible trong MVP.
+
+## 9) API liên quan
+
+### Service API nội bộ
+- `composeResponse(model_result: ModelResult | None, error: ErrorPayload | None) -> ChatResponse`
+
+Ví dụ schema trả về:
+```python
+class ErrorPayload(BaseModel):
+	code: str
+	message: str
+
+class ChatResponse(BaseModel):
+	request_id: str
+	status: Literal["ok", "error"]
+	answer: str
+	error: ErrorPayload | None
+	meta: dict
+```
+
+### FastAPI response model
+- Endpoint `POST /chat` nên khai báo `response_model=ChatResponse` để giữ contract ổn định.
+
+### LangGraph node (nếu dùng graph)
+- Node tên `compose_response`.
+- Input state: `model_result`, `error`, `request_id`.
+- Output state thêm: `final_response`.

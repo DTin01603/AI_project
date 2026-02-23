@@ -58,3 +58,90 @@
 - Có xử lý lỗi đầu vào và lỗi model, không crash process.
 - UI hiển thị được trạng thái thành công/thất bại rõ ràng.
 - Có test đơn vị cho 5 bước và 1 test integration cho endpoint `/chat`.
+
+## 8) API bên ngoài (FastAPI)
+
+### 8.1) `POST /chat`
+- Mục đích: nhận câu hỏi người dùng và trả câu trả lời một lần (non-streaming).
+- Request body:
+```json
+{
+	"message": "Xin chào, bạn có thể giúp tôi không?",
+	"locale": "vi-VN",
+	"channel": "web"
+}
+```
+- Response thành công (HTTP 200):
+```json
+{
+	"request_id": "req_123",
+	"status": "ok",
+	"answer": "Chào bạn, mình có thể giúp...",
+	"error": null,
+	"meta": {
+		"model": "gpt-4o-mini",
+		"finish_reason": "stop"
+	}
+}
+```
+- Response lỗi:
+  - HTTP 400: `BAD_REQUEST` (input rỗng/sai schema).
+  - HTTP 502: `MODEL_ERROR` (provider/model lỗi).
+  - HTTP 500: `INTERNAL_ERROR` (lỗi hệ thống).
+
+### 8.2) `GET /health`
+- Mục đích: kiểm tra trạng thái service.
+- Response (HTTP 200):
+```json
+{
+	"status": "ok"
+}
+```
+
+### 8.3) `GET /ready`
+- Mục đích: kiểm tra service sẵn sàng nhận traffic.
+- Kiểm tra tối thiểu: config model, API key, kết nối dependency cần thiết.
+- Response:
+  - HTTP 200 khi sẵn sàng.
+  - HTTP 503 khi chưa sẵn sàng.
+
+## 9) API nội bộ trong pipeline (service layer)
+- `captureQuestion(payload) -> CapturedQuestion`
+- `normalizeRequest(captured) -> NormalizedRequest`
+- `invokeModelsWithContext(normalized) -> ModelResult`
+- `composeResponse(model_result | error) -> ResponsePayload`
+- `deliverResponseToUser(response_payload) -> HTTPResponse`
+
+Gợi ý kiểu dữ liệu (Pydantic):
+- `ChatRequest`
+- `ChatResponse`
+- `ErrorPayload`
+- `NormalizedRequest`
+- `ModelResult`
+
+## 10) API sử dụng từ LangChain (khi tích hợp model)
+- `ChatPromptTemplate.from_messages(...)`: tạo prompt chuẩn.
+- `ChatOpenAI(...)` hoặc provider tương đương: gọi LLM.
+- `llm.invoke(messages)`: nhận output một lần.
+- `StrOutputParser()` (tuỳ chọn): chuẩn hóa output text.
+
+Luồng tích hợp tối thiểu:
+1. Tạo prompt từ `message`.
+2. Gọi `llm.invoke(...)` với `temperature`, `max_tokens`.
+3. Map output về `ModelResult`.
+
+## 11) API sử dụng từ LangGraph (khi cần orchestration rõ ràng)
+- `StateGraph(StateSchema)`: khai báo state dùng chung.
+- `add_node(name, fn)`: thêm node xử lý.
+- `add_edge(a, b)`: nối luồng tuần tự.
+- `add_conditional_edges(...)` (tuỳ chọn): rẽ nhánh theo lỗi/điều kiện.
+- `compile()`: build graph runnable.
+- `graph.invoke(state)`: chạy graph cho mỗi request.
+
+State tối thiểu đề xuất:
+- `request_id`
+- `message`
+- `normalized_request`
+- `model_result`
+- `final_response`
+- `error`

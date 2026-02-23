@@ -62,3 +62,29 @@
 - Tiếp nhận được input từ bước trước và sinh schema ổn định cho bước model.
 - Tất cả field đầu ra được type rõ ràng.
 - Test pass cho defaulting + validation + unsupported channel.
+
+## 9) API liên quan
+
+### Service API nội bộ
+- `normalizeRequest(captured: CapturedQuestion) -> NormalizedRequest`
+
+Ví dụ schema đầu ra:
+```python
+class NormalizedRequest(BaseModel):
+		request_id: str
+		message: str
+		locale: str
+		channel: str
+		constraints: dict
+		meta: dict
+```
+
+### FastAPI
+- Mapping lỗi validate sang HTTP:
+	- `BAD_REQUEST` -> 400
+	- `INTERNAL_ERROR` -> 500
+
+### LangGraph node (nếu dùng graph)
+- Node tên `normalize_request`.
+- Input state: `captured_question`.
+- Output state thêm: `normalized_request`, `request_id`.

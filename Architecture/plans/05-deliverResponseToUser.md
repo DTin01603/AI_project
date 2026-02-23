@@ -35,3 +35,29 @@
 - Mapping HTTP rõ ràng và được test đầy đủ.
 - UI nhận được JSON nhất quán cho mọi tình huống.
 - Log có đủ thông tin để debug một request từ đầu đến cuối.
+
+## 8) API liên quan
+
+### FastAPI route chính
+- `@app.post("/chat", response_model=ChatResponse)`
+- Handler gọi tuần tự:
+	1. `captureQuestion`
+	2. `normalizeRequest`
+	3. `invokeModelsWithContext`
+	4. `composeResponse`
+	5. trả HTTP response theo mapping lỗi
+
+### Mapping status code trong handler
+- `status=ok` -> `200 OK`
+- `error.code=BAD_REQUEST` -> `400 Bad Request`
+- `error.code=MODEL_ERROR` -> `502 Bad Gateway`
+- lỗi còn lại -> `500 Internal Server Error`
+
+### FastAPI endpoints vận hành
+- `GET /health`: kiểm tra process sống.
+- `GET /ready`: kiểm tra service sẵn sàng nhận traffic.
+
+### LangGraph terminal node (nếu dùng graph)
+- Node tên `deliver_response`.
+- Input state: `final_response`.
+- Output: object trả về cho FastAPI layer.
