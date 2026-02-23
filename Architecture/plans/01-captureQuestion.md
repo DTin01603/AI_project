@@ -1,38 +1,68 @@
 # captureQuestion()
 
-## Trach nhiem
-- Tiep nhan cau hoi nguoi dung tu diem vao UI.
+## 1) Mục tiêu
+- Nhận dữ liệu message thuần từ UI/API.
+- Loại bỏ nhiễu dữ liệu rác tối thiểu để tránh lỗi sớm.
+- Tạo object đầu vào ban đầu có metadata cơ bản cho các bước sau.
 
-## Mo ta chi tiet
-- Thu thap cau hoi thuan tu API/UI/CLI va gan metadata co ban.
-- Chuan hoa toi thieu (cat khoang trang, chuan hoa dau dong) ma khong doi nghia.
-- Ap dung gioi han dau vao som de tranh payload qua lon.
+## 2) Input contract
+```json
+{
+	"message": "  Tôi cần gợi ý học Python  ",
+	"locale": "vi-VN",
+	"channel": "web"
+}
+```
 
-## Ghi chu trien khai
-- UI layer: React component thu nhan input va kiem tra co ban.
-- Backend: Python API nhan payload neu UI gui qua HTTP.
-- LangGraph: entrypoint tao state ban dau tu payload.
+### Quy tắc validate
+- `message` bắt buộc là string.
+- Sau khi trim, `message` không được rỗng.
+- Độ dài `message` <= 4000 ký tự (MVP).
+- `locale`, `channel` là optional; nếu thiếu sẽ để bước normalizeRequest gán mặc định.
 
-## Dau vao
-- Raw user input (string)
-- Optional metadata (locale, channel)
+## 3) Output contract
+```json
+{
+	"raw_message": "Tôi cần gợi ý học Python",
+	"locale": "vi-VN",
+	"channel": "web",
+	"received_at": "2026-02-23T08:00:00Z"
+}
+```
 
-## Dau ra
-- Question payload (string + metadata)
+## 4) Luồng xử lý chi tiết
+1. Đọc body request từ API.
+2. Lấy `message` và trim space đầu/cuối.
+3. Chuẩn hóa xuống dòng (`\r\n` -> `\n`).
+4. Kiểm tra rỗng và giới hạn độ dài.
+5. Tạo payload kết quả kèm timestamp.
 
-## Phu thuoc
-- None
+## 5) Pseudocode
+```text
+if message is not string: raise BAD_REQUEST
+msg = trim(message)
+msg = normalize_newline(msg)
+if msg is empty: raise BAD_REQUEST
+if len(msg) > 4000: raise BAD_REQUEST
+return { raw_message: msg, locale, channel, received_at }
+```
 
-## Loi co the xay ra
-- Empty input
-- Oversized input
+## 6) Lỗi và cách trả về
+- Empty message -> `BAD_REQUEST`, thông điệp: "message must not be empty".
+- Message quá dài -> `BAD_REQUEST`, thông điệp: "message exceeds max length".
+- Sai kiểu dữ liệu -> `BAD_REQUEST`, thông điệp: "message must be a string".
 
-## Bao mat va gioi han
-- Enforce UI-side input size limits va validation co ban.
-- Tu choi input vi pham policy truoc khi gui den API.
+## 7) Logging tối thiểu
+- Log `request_id` (nếu đã có), `channel`, `message_length`.
+- Không log full message nếu chưa cần thiết (tránh lộ dữ liệu nhạy cảm).
 
-## Kiem thu don vi
-- Accepts typical question string.
-- Rejects empty or whitespace-only input.
-- Trims or normalizes input when required.
-- Handles very long input with validation error.
+## 8) Unit test bắt buộc
+- Nhập hợp lệ -> pass và được trim.
+- Nhập toàn khoảng trắng -> fail `BAD_REQUEST`.
+- Nhập > 4000 ký tự -> fail `BAD_REQUEST`.
+- Nhập kiểu khác string -> fail `BAD_REQUEST`.
+
+## 9) Definition of Done
+- Hàm trả về payload đúng schema đã định nghĩa.
+- Tất cả case validate lỗi trả về mã lỗi nhất quán.
+- Unit test xanh cho 4 nhóm case trên.
