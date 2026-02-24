@@ -1,99 +1,31 @@
 # composeResponse()
 
+## 0) Metadata
+- Owner: Backend Team
+- Version: 2.0
+
 ## 1) Mục tiêu
-- Biến kết quả model thành payload cuối cùng để UI render ngay.
-- Chuẩn hóa định dạng thành công/thất bại.
-- Luôn giữ `request_id` để trace xuyên suốt.
+- Chuẩn hóa payload trả UI cho cả success/error.
+- Luôn có `request_id`, `status`, `answer`, `error`, `meta`.
 
-## 2) Đầu vào
-```json
-{
-	"request_id": "req_01HT...",
-	"model": "provider-x",
-	"answer_text": "Bạn có thể bắt đầu bằng việc...",
-	"finish_reason": "stop",
-	"usage": {
-		"input_tokens": 120,
-		"output_tokens": 180
-	}
-}
-```
+## 2) Success response
+- `status = ok`
+- `answer = answer_text`
+- `error = null`
+- `meta = { provider, model, finish_reason }`
 
-## 3) Đầu ra thành công
-```json
-{
-	"request_id": "req_01HT...",
-	"status": "ok",
-	"answer": "Bạn có thể bắt đầu bằng việc...",
-	"error": null,
-	"meta": {
-		"model": "provider-x",
-		"finish_reason": "stop"
-	}
-}
-```
+## 3) Error response
+- `status = error`
+- `answer` fallback thân thiện.
+- `error = { code, message }`
+- `meta` vẫn có key nhưng value có thể null.
 
-## 4) Đầu ra thất bại
-```json
-{
-	"request_id": "req_01HT...",
-	"status": "error",
-	"answer": "Xin lỗi, hệ thống tạm thời gặp sự cố. Bạn thử lại giúp mình.",
-	"error": {
-		"code": "MODEL_ERROR",
-		"message": "Model invocation failed"
-	},
-	"meta": {
-		"model": null,
-		"finish_reason": null
-	}
-}
-```
+## 4) Rules
+- truncate answer nếu > 3000 ký tự.
+- không trả debug/raw stacktrace ra client.
 
-## 5) Luồng xử lý chi tiết
-1. Kiểm tra object model output có hợp lệ hay không.
-2. Nếu thành công: đưa `answer_text` vào trường `answer`.
-3. Nếu thất bại: set `status=error`, gán fallback message để UI luôn có text hiển thị.
-4. Bổ sung `meta` tối thiểu (model, finish_reason).
-5. Trả response payload thống nhất cho bước deliver.
-
-## 6) Quy tắc format MVP
-- Không thêm markdown phức tạp.
-- Giữ answer ngắn gọn, không bao gồm debug data.
-- Nếu text quá dài (> 3000 ký tự), cắt ngưỡng và thêm `...`.
-
-## 7) Unit test bắt buộc
-- Có model output -> payload `status=ok` đúng schema.
-- Không có model output -> payload `status=error` + fallback text.
-- Luôn có `request_id` trong mọi response.
-
-## 8) Definition of Done
-- UI có thể render được cả 2 trạng thái success/error không cần if-else phức tạp.
-- Response schema ổn định và backward-compatible trong MVP.
-
-## 9) API liên quan
-
-### Service API nội bộ
-- `composeResponse(model_result: ModelResult | None, error: ErrorPayload | None) -> ChatResponse`
-
-Ví dụ schema trả về:
-```python
-class ErrorPayload(BaseModel):
-	code: str
-	message: str
-
-class ChatResponse(BaseModel):
-	request_id: str
-	status: Literal["ok", "error"]
-	answer: str
-	error: ErrorPayload | None
-	meta: dict
-```
-
-### FastAPI response model
-- Endpoint `POST /chat` nên khai báo `response_model=ChatResponse` để giữ contract ổn định.
-
-### LangGraph node (nếu dùng graph)
-- Node tên `compose_response`.
-- Input state: `model_result`, `error`, `request_id`.
-- Output state thêm: `final_response`.
+## 5) Unit tests bắt buộc
+- success chuẩn schema.
+- error chuẩn schema.
+- luôn có request_id.
+- truncate hoạt động đúng.

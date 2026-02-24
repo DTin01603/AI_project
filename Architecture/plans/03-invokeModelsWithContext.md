@@ -1,96 +1,51 @@
 # invokeModelsWithContext()
 
+## 0) Metadata
+- Owner: Backend Team
+- Version: 2.0
+
 ## 1) Mục tiêu
-- Gọi model với request đã chuẩn hóa.
-- Trả về kết quả text có cấu trúc tối thiểu cho composeResponse.
-- Đảm bảo lỗi model được bắt và map về mã lỗi nội bộ.
+- Gọi đúng adapter theo model đã chọn.
+- Trả `ModelResult` thống nhất, độc lập provider.
 
-## 2) Phạm vi MVP
-- Không gọi retrieval.
-- Không gọi tool/function calling.
-- Không multi-turn memory.
+## 2) MVP model registry (ví dụ)
+- `gpt-4o-mini` -> OpenAI adapter
+- `gpt-4.1-mini` -> OpenAI adapter
+- `gemini-2.5-flash` -> Google adapter
 
-## 3) Đầu vào
+## 3) Prompt template
+- System: "Bạn là trợ lý AI hữu ích, trả lời ngắn gọn và đúng ngôn ngữ user."
+- User: `{message}`
+
+## 4) Flow
+1. Resolve adapter từ `normalized.model`.
+2. Build prompt bằng LangChain.
+3. Invoke non-streaming với constraints.
+4. Retry 1 lần nếu timeout/provider transient error.
+5. Validate output không rỗng.
+
+## 5) Output
 ```json
 {
-	"request_id": "req_01HT...",
-	"message": "Tôi cần gợi ý học Python",
-	"locale": "vi-VN",
-	"channel": "web",
-	"constraints": {
-		"max_output_tokens": 500,
-		"temperature": 0.3
-	}
+  "request_id": "req_01HT...",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "answer_text": "Bạn có thể bắt đầu từ...",
+  "finish_reason": "stop",
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 140
+  }
 }
 ```
 
-## 4) Prompt template MVP
-```text
-System: Bạn là trợ lý AI hữu ích, trả lời ngắn gọn, rõ ràng, đúng ngôn ngữ người dùng.
-User: {{message}}
-```
+## 6) Errors
+- provider lỗi/timeout -> `MODEL_ERROR`
+- output rỗng -> `MODEL_EMPTY_OUTPUT`
+- model không tồn tại trong registry -> `UNSUPPORTED_MODEL`
 
-## 5) Đầu ra
-```json
-{
-	"request_id": "req_01HT...",
-	"model": "<provider-model-name>",
-	"answer_text": "Bạn có thể bắt đầu bằng việc...",
-	"finish_reason": "stop",
-	"usage": {
-		"input_tokens": 120,
-		"output_tokens": 180
-	}
-}
-```
-
-## 6) Luồng xử lý chi tiết
-1. Tạo prompt từ `message`.
-2. Gọi model client với `temperature`, `max_output_tokens`.
-3. Validate `answer_text` không rỗng.
-4. Chuẩn hóa metadata (`model`, `usage`, `finish_reason`).
-5. Trả về object kết quả.
-
-## 7) Chiến lược lỗi MVP
-- Timeout/provider error -> thử lại 1 lần (retry 1).
-- Nếu vẫn fail -> trả `MODEL_ERROR` cho bước compose.
-- Nếu output rỗng -> map `MODEL_EMPTY_OUTPUT`.
-
-## 8) Logging tối thiểu
-- `request_id`, model name, latency ms, token usage.
-- Không log full prompt nếu không cần.
-
-## 9) Unit test bắt buộc
-- Model client trả output hợp lệ -> pass.
-- Provider throw exception -> retry và map lỗi đúng.
-- Output rỗng -> fail đúng mã lỗi.
-
-## 10) Definition of Done
-- Gọi model thành công với request hợp lệ.
-- Có mapping lỗi nhất quán cho timeout/provider/empty output.
-- Unit test pass cho 3 nhóm case chính.
-
-## 11) API liên quan
-
-### LangChain APIs
-- `ChatPromptTemplate.from_messages(...)`: build prompt từ system + user message.
-- `ChatOpenAI(model=..., temperature=...)` (hoặc provider tương đương): tạo model client.
-- `llm.invoke(messages)`: gọi model non-streaming.
-
-Ví dụ luồng gọi tối thiểu:
-```python
-prompt = ChatPromptTemplate.from_messages([
-	("system", "Bạn là trợ lý AI hữu ích, trả lời ngắn gọn."),
-	("human", "{message}")
-])
-messages = prompt.format_messages(message=normalized_request.message)
-result = llm.invoke(messages)
-```
-
-### Service API nội bộ
-- `invokeModelsWithContext(normalized: NormalizedRequest) -> ModelResult`
-
-### LangGraph node (nếu dùng graph)
-- Node tên `invoke_model`.
-- Input state: `normalized_request`.
-- Output state thêm: `model_result` hoặc `error`.
+## 7) Unit tests bắt buộc
+- happy path theo từng adapter mock.
+- transient error + retry đúng 1 lần.
+- empty output.
+- unsupported model.
