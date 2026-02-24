@@ -6,3 +6,4 @@ app/
 tests/
 frontend/
 .pytest_cache/
+.env

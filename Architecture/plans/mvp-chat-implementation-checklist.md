@@ -10,11 +10,12 @@
 - [ ] Có `default_model`
 - [ ] Validate model tại normalize step
 - [ ] Thêm API `GET /models`
+- [ ] Phase 1: chỉ cấu hình provider OpenAI
 
 ## C. Pipeline 5 bước
 - [ ] captureQuestion
 - [ ] normalizeRequest (default + validate model/channel)
-- [ ] invokeModelsWithContext (adapter + retry 1)
+- [ ] invokeModelsWithContext (adapter, lỗi thì trả ngay)
 - [ ] composeResponse
 - [ ] deliverResponseToUser (HTTP mapping)
 
@@ -26,7 +27,7 @@
 
 ## E. Test
 - [ ] Unit test cho 5 step
-- [ ] Mock adapter cho OpenAI/Google
+- [ ] Mock adapter cho OpenAI
 - [ ] Integration test `/chat` cho 200/400/502/500
 - [ ] Integration test `/models`, `/health`, `/ready`
 

@@ -11,7 +11,10 @@
 ## 2) MVP model registry (ví dụ)
 - `gpt-4o-mini` -> OpenAI adapter
 - `gpt-4.1-mini` -> OpenAI adapter
-- `gemini-2.5-flash` -> Google adapter
+
+Ghi chú phase 1:
+- Chỉ hỗ trợ OpenAI.
+- Danh sách model có thể mở rộng sau nhưng chưa tích hợp provider khác.
 
 ## 3) Prompt template
 - System: "Bạn là trợ lý AI hữu ích, trả lời ngắn gọn và đúng ngôn ngữ user."
@@ -21,7 +24,7 @@
 1. Resolve adapter từ `normalized.model`.
 2. Build prompt bằng LangChain.
 3. Invoke non-streaming với constraints.
-4. Retry 1 lần nếu timeout/provider transient error.
+4. Nếu provider lỗi/timeout: trả lỗi ngay.
 5. Validate output không rỗng.
 
 ## 5) Output
@@ -46,6 +49,6 @@
 
 ## 7) Unit tests bắt buộc
 - happy path theo từng adapter mock.
-- transient error + retry đúng 1 lần.
+- transient/provider error -> trả lỗi đúng mã.
 - empty output.
 - unsupported model.

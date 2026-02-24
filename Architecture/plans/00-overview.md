@@ -15,6 +15,7 @@
 - `POST /chat` non-streaming.
 - `GET /models` trả danh sách model hỗ trợ.
 - Pipeline 5 bước: `captureQuestion -> normalizeRequest -> invokeModelsWithContext -> composeResponse -> deliverResponseToUser`.
+- Phase 1 chỉ tích hợp provider OpenAI.
 
 ### Out of scope
 - Retrieval/Vector DB, tool calling, multi-agent, queue scheduling, memory dài hạn.
@@ -71,6 +72,10 @@
 - `MODEL_ERROR` -> 502
 - `MODEL_EMPTY_OUTPUT` -> 502
 - `INTERNAL_ERROR` -> 500
+
+## 4.1) Chính sách lỗi model cho MVP
+- Khi model lỗi: trả lỗi ngay theo mapping (`MODEL_ERROR`/`MODEL_EMPTY_OUTPUT`).
+- Không fallback sang model khác trong phase 1.
 
 ## 5) API
 - `POST /chat`
