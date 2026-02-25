@@ -2,7 +2,7 @@
 
 ## Giới thiệu
 
-Hệ thống Chat AI Đa Model là một nền tảng chat đơn giản cho phép người dùng tương tác với nhiều AI model khác nhau thông qua một API thống nhất. Đây là Phase 1 MVP, hệ thống sử dụng FastAPI làm backend framework, tích hợp LangChain để quản lý workflow, và hỗ trợ provider Google với các model như gemini-1.5-flash và gemini-1.5-pro.
+Hệ thống Chat AI Đa Model là một nền tảng chat đơn giản cho phép người dùng tương tác với nhiều AI model khác nhau thông qua một API thống nhất. Đây là Phase 1 MVP, hệ thống sử dụng FastAPI 0.116+ làm backend framework, tích hợp LangChain 0.3+ để quản lý workflow, và hỗ trợ provider Google với các model như gemini-2.5-flash và gemini-2.5-flash-lite thông qua langchain-google-genai 4.0+.
 
 Hệ thống được xây dựng dựa trên kiến trúc pipeline 5 bước: capture question → normalize request → invoke models with context → compose response → deliver response to user. Phase 1 tập trung vào non-streaming chat với một provider duy nhất, không bao gồm retrieval, vector DB, tool calling, hay multi-agent.
 
@@ -66,7 +66,7 @@ Hệ thống bao gồm hai phần chính:
 
 1. WHEN một yêu cầu GET được gửi đến endpoint /models, THE Chat_API SHALL trả về danh sách tất cả model trong Model_Registry
 2. THE Model_Registry SHALL chứa thông tin về provider, model name, và trạng thái available cho mỗi model
-3. THE Model_Registry SHALL hỗ trợ các model Google Gemini bao gồm gemini-1.5-flash và gemini-1.5-pro trong Phase 1
+3. THE Model_Registry SHALL hỗ trợ các model Google Gemini bao gồm gemini-2.5-flash và gemini-2.5-flash-lite trong Phase 1
 4. THE Chat_API SHALL trả về HTTP 200 với danh sách model ở định dạng JSON
 5. WHERE một model bị lỗi hoặc không khả dụng, THE Model_Registry SHALL đánh dấu trạng thái available là false
 6. THE Model_Registry SHALL phản ánh đúng trạng thái runtime của các model

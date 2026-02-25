@@ -2,7 +2,7 @@
 
 ## Tổng quan
 
-Hệ thống Chat AI Đa Model là một full-stack application bao gồm REST API backend (FastAPI + LangChain) và React frontend, cho phép người dùng tương tác với nhiều AI model thông qua giao diện web đơn giản. Phase 1 MVP tập trung vào non-streaming chat với provider Google, hỗ trợ các model như gemini-1.5-flash và gemini-1.5-pro.
+Hệ thống Chat AI Đa Model là một full-stack application bao gồm REST API backend (FastAPI 0.116+ + LangChain 0.3+) và React 19 frontend, cho phép người dùng tương tác với nhiều AI model thông qua giao diện web đơn giản. Phase 1 MVP tập trung vào non-streaming chat với provider Google, hỗ trợ các model như gemini-2.5-flash và gemini-2.5-flash-lite thông qua langchain-google-genai 4.0+.
 
 Kiến trúc hệ thống bao gồm hai phần chính:
 
@@ -611,13 +611,13 @@ def initialize_registry(settings: Settings) -> ModelRegistry:
     # Register Google models if API key available
     if settings.google_api_key:
         registry.register_model(ModelInfo(
-            name="gemini-1.5-flash",
+            name="gemini-2.5-flash",
             provider="google",
             available=True,
             adapter_class=GoogleAdapter
         ))
         registry.register_model(ModelInfo(
-            name="gemini-1.5-pro",
+            name="gemini-2.5-flash-lite",
             provider="google",
             available=True,
             adapter_class=GoogleAdapter
@@ -817,7 +817,7 @@ class ErrorCode(str, Enum):
   "message": "Giải thích Python list comprehension",
   "locale": "vi-VN",
   "channel": "web",
-  "model": "gemini-1.5-flash"
+  "model": "gemini-2.5-flash"
 }
 ```
 
@@ -830,7 +830,7 @@ class ErrorCode(str, Enum):
   "error": null,
   "meta": {
     "provider": "google",
-    "model": "gemini-1.5-flash",
+    "model": "gemini-2.5-flash",
     "finish_reason": "stop"
   }
 }
@@ -879,12 +879,12 @@ class ErrorCode(str, Enum):
 {
   "models": [
     {
-      "name": "gemini-1.5-flash",
+      "name": "gemini-2.5-flash",
       "provider": "google",
       "available": true
     },
     {
-      "name": "gemini-1.5-pro",
+      "name": "gemini-2.5-flash-lite",
       "provider": "google",
       "available": true
     }
@@ -934,7 +934,7 @@ class Settings(BaseSettings):
     google_timeout: int = 30
     
     # Default Model
-    default_model: str = "gemini-1.5-flash"
+    default_model: str = "gemini-2.5-flash"
     
     # Constraints
     default_temperature: float = 0.3
@@ -966,13 +966,13 @@ async def startup_event():
     if settings.google_api_key:
         if validate_google_key(settings.google_api_key):
             registry.register_model(ModelInfo(
-                name="gemini-1.5-flash",
+                name="gemini-2.5-flash",
                 provider="google",
                 available=True,
                 adapter_class=GoogleAdapter
             ))
             registry.register_model(ModelInfo(
-                name="gemini-1.5-pro",
+                name="gemini-2.5-flash-lite",
                 provider="google",
                 available=True,
                 adapter_class=GoogleAdapter
@@ -995,7 +995,7 @@ GOOGLE_API_KEY=AIza...
 GOOGLE_TIMEOUT=30
 
 # Default Model
-DEFAULT_MODEL=gemini-1.5-flash
+DEFAULT_MODEL=gemini-2.5-flash
 
 # Constraints
 DEFAULT_TEMPERATURE=0.3
@@ -1570,7 +1570,7 @@ from hypothesis import given, settings, strategies as st
     message=st.text(min_size=1, max_size=4000),
     locale=st.one_of(st.none(), st.text()),
     channel=st.one_of(st.none(), st.just("web")),
-    model=st.one_of(st.none(), st.sampled_from(["gemini-1.5-flash", "gemini-1.5-pro"]))
+    model=st.one_of(st.none(), st.sampled_from(["gemini-2.5-flash", "gemini-2.5-flash-lite"]))
 )
 def test_property_X_description(message, locale, channel, model):
     """
@@ -1627,7 +1627,7 @@ def test_capture_question_empty_message():
 - ✅ Default locale: `None` → `"vi-VN"`
 - ✅ Default channel: `None` → `"web"`
 - ✅ Default model: `None` → `settings.default_model`
-- ✅ Keep valid model: `"gemini-1.5-flash"` → `"gemini-1.5-flash"`
+- ✅ Keep valid model: `"gemini-2.5-flash"` → `"gemini-2.5-flash"`
 - ✅ Reject invalid channel: `"mobile"` → `BAD_REQUEST`
 - ✅ Reject unsupported model: `"gpt-5"` → `UNSUPPORTED_MODEL`
 - ✅ Locale normalization: `"VI-VN"` → `"vi-vn"`
@@ -1638,8 +1638,8 @@ def test_capture_question_empty_message():
 ```python
 def test_normalize_request_defaults():
     registry = ModelRegistry()
-    registry.register_model(ModelInfo(name="gemini-1.5-flash", provider="google", available=True))
-    settings = Settings(default_model="gemini-1.5-flash")
+    registry.register_model(ModelInfo(name="gemini-2.5-flash", provider="google", available=True))
+    settings = Settings(default_model="gemini-2.5-flash")
     service = NormalizeRequestService(registry, settings)
     
     captured = CapturedQuestion(
@@ -1654,7 +1654,7 @@ def test_normalize_request_defaults():
     
     assert result.locale == "vi-vn"
     assert result.channel == "web"
-    assert result.model == "gemini-1.5-flash"
+    assert result.model == "gemini-2.5-flash"
     assert result.constraints.temperature == 0.3
     assert result.constraints.max_output_tokens == 500
 ```
@@ -1680,7 +1680,7 @@ def test_invoke_models_happy_path(mocker):
     mock_llm = mocker.Mock()
     mock_adapter.get_llm.return_value = mock_llm
     
-    registry._adapters["gemini-1.5-flash"] = mock_adapter
+    registry._adapters["gemini-2.5-flash"] = mock_adapter
     
     # Mock LangChain response
     mock_response = mocker.Mock()
@@ -1694,7 +1694,7 @@ def test_invoke_models_happy_path(mocker):
         message="test question",
         locale="vi-vn",
         channel="web",
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         constraints=Constraints(temperature=0.3, max_output_tokens=500),
         meta=RequestMeta(received_at=datetime.utcnow())
     )
@@ -1705,7 +1705,7 @@ def test_invoke_models_happy_path(mocker):
     # Verify
     assert result.answer_text == "This is the answer"
     assert result.provider == "google"
-    assert result.model == "gemini-1.5-flash"
+    assert result.model == "gemini-2.5-flash"
     assert result.finish_reason == "stop"
 ```
 
@@ -1726,7 +1726,7 @@ def test_compose_success_response():
     model_result = ModelResult(
         request_id="req_123",
         provider="google",
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         answer_text="This is the answer",
         finish_reason="stop",
         usage=TokenUsage(input_tokens=10, output_tokens=20)
@@ -1739,7 +1739,7 @@ def test_compose_success_response():
     assert response.answer == "This is the answer"
     assert response.error is None
     assert response.meta.provider == "google"
-    assert response.meta.model == "gemini-1.5-flash"
+    assert response.meta.model == "gemini-2.5-flash"
     assert response.meta.finish_reason == "stop"
 
 def test_compose_response_truncate():
@@ -1748,7 +1748,7 @@ def test_compose_response_truncate():
     model_result = ModelResult(
         request_id="req_123",
         provider="google",
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         answer_text=long_answer,
         finish_reason="stop",
         usage=TokenUsage(input_tokens=10, output_tokens=20)
@@ -1783,7 +1783,7 @@ def test_deliver_response_success():
         status="ok",
         answer="answer",
         error=None,
-        meta=ResponseMeta(provider="google", model="gemini-1.5-flash", finish_reason="stop")
+        meta=ResponseMeta(provider="google", model="gemini-2.5-flash", finish_reason="stop")
     )
     
     start_time = time.time()
@@ -1803,7 +1803,7 @@ def test_deliver_response_success():
 def test_chat_endpoint_success(client, mock_google):
     response = client.post("/chat", json={
         "message": "Hello",
-        "model": "gemini-1.5-flash"
+        "model": "gemini-2.5-flash"
     })
     
     assert response.status_code == 200
@@ -1835,7 +1835,7 @@ def test_chat_endpoint_unsupported_model(client):
 def test_chat_endpoint_model_error(client, mock_google_timeout):
     response = client.post("/chat", json={
         "message": "Hello",
-        "model": "gemini-1.5-flash"
+        "model": "gemini-2.5-flash"
     })
     
     assert response.status_code == 502
@@ -1965,14 +1965,14 @@ def test_property_default_values_resolution(message, has_locale, has_channel, ha
     SHALL have default values.
     """
     registry = create_test_registry()
-    settings = Settings(default_model="gemini-1.5-flash")
+    settings = Settings(default_model="gemini-2.5-flash")
     service = NormalizeRequestService(registry, settings)
     
     captured = CapturedQuestion(
         raw_message=message,
         locale="en-US" if has_locale else None,
         channel="web" if has_channel else None,
-        model="gemini-1.5-flash" if has_model else None,
+        model="gemini-2.5-flash" if has_model else None,
         received_at=datetime.utcnow()
     )
     
@@ -1984,7 +1984,7 @@ def test_property_default_values_resolution(message, has_locale, has_channel, ha
     if not has_channel:
         assert result.channel == "web"
     if not has_model:
-        assert result.model == "gemini-1.5-flash"
+        assert result.model == "gemini-2.5-flash"
 ```
 
 **Property 26: HTTP status code mapping**:
@@ -2066,65 +2066,78 @@ jobs:
 ## Technology Stack
 
 ### Backend Framework
-- **FastAPI**: Modern, fast web framework cho Python
+- **FastAPI 0.116+**: Modern, fast web framework cho Python
   - Automatic OpenAPI documentation
   - Pydantic integration cho validation
   - Async support (cho future streaming)
   - Dependency injection
   - CORS middleware cho frontend integration
+  - Python 3.10+ support (recommended 3.11+)
 
 ### LLM Integration
-- **LangChain**: Framework cho LLM applications
+- **LangChain 0.3+**: Framework cho LLM applications
   - Unified interface cho multiple providers
   - Prompt template management
   - Chain composition
-- **langchain-google-genai**: Google Gemini integration cho LangChain
+  - v1.0 stable release với backward compatibility
+- **langchain-google-genai 4.0+**: Google Gemini integration cho LangChain
+  - Sử dụng consolidated google-genai SDK
+  - Hỗ trợ cả Gemini Developer API và Vertex AI
+  - Chat, vision, embeddings, và RAG features
 
 ### Data Validation
-- **Pydantic**: Data validation và settings management
-  - Type checking
+- **Pydantic 2.12+**: Data validation và settings management
+  - Type checking với Rust-based validation core
+  - 5-50x faster than Pydantic v1
   - Automatic validation
   - JSON schema generation
   - Settings từ environment variables
 
 ### Logging
-- **structlog**: Structured logging
+- **structlog 24.4+**: Structured logging
   - JSON output format
   - Context binding (request_id)
   - Easy parsing và analysis
 
 ### Testing
-- **pytest**: Testing framework
+- **pytest 9.0+**: Testing framework
+  - Native TOML configuration support
+  - Experimental subtests
   - Fixtures cho setup/teardown
   - Parametrized tests
   - Plugin ecosystem
-- **pytest-cov**: Coverage reporting
-- **hypothesis**: Property-based testing
+- **pytest-cov 6.0+**: Coverage reporting
+- **hypothesis 6.103+**: Property-based testing
   - Automatic test case generation
   - Shrinking failed examples
   - Stateful testing support
 
 ### Frontend Framework
-- **React**: UI library cho building user interfaces
+- **React 19**: UI library cho building user interfaces
+  - React Server Components (RSC) support
+  - Actions feature cho async tasks
+  - Improved automatic batching
+  - Enhanced Concurrent Features
+  - Better TypeScript integration
   - Component-based architecture
   - Hooks cho state management
-  - Virtual DOM cho performance
-- **Vite**: Fast build tool và dev server
+- **Vite 6**: Fast build tool và dev server
   - Hot Module Replacement (HMR)
   - Fast cold start
   - Optimized production builds
-- **Axios**: HTTP client cho API calls
+  - Native ESM support
+- **Axios 1.7+**: HTTP client cho API calls
   - Promise-based
   - Request/response interceptors
   - Automatic JSON transformation
 
 ### Development Tools
-- **uvicorn**: ASGI server cho FastAPI
-- **python-dotenv**: Load environment variables từ .env
-- **black**: Code formatting
-- **ruff**: Fast Python linter
-- **mypy**: Static type checking
-- **ESLint**: JavaScript/React linting
+- **uvicorn 0.34+**: ASGI server cho FastAPI
+- **python-dotenv 1.0+**: Load environment variables từ .env
+- **black 24.10+**: Code formatting
+- **ruff 0.8+**: Fast Python linter
+- **mypy 1.13+**: Static type checking
+- **ESLint 9+**: JavaScript/React linting
 - **Prettier**: Code formatting cho frontend
 
 ### Dependencies
@@ -2132,23 +2145,23 @@ jobs:
 **Backend**:
 ```txt
 # requirements.txt
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
-langchain==0.1.0
-langchain-google-genai==0.0.5
-structlog==24.1.0
-python-dotenv==1.0.0
+fastapi==0.116.1
+uvicorn[standard]==0.34.0
+pydantic==2.12.5
+pydantic-settings==2.7.1
+langchain==0.3.26
+langchain-google-genai==4.0.0
+structlog==24.4.0
+python-dotenv==1.0.1
 
 # requirements-dev.txt
-pytest==7.4.4
-pytest-cov==4.1.0
-pytest-mock==3.12.0
-hypothesis==6.92.0
-black==23.12.1
-ruff==0.1.11
-mypy==1.8.0
+pytest==9.0.2
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+hypothesis==6.103.1
+black==24.10.0
+ruff==0.8.4
+mypy==1.13.0
 ```
 
 **Frontend**:
@@ -2156,15 +2169,15 @@ mypy==1.8.0
 // package.json
 {
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "axios": "^1.6.0"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "axios": "^1.7.9"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.0",
-    "vite": "^5.0.0",
-    "eslint": "^8.55.0",
-    "eslint-plugin-react": "^7.33.0"
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.5",
+    "eslint": "^9.18.0",
+    "eslint-plugin-react": "^7.37.2"
   }
 }
 ```
@@ -2765,7 +2778,7 @@ GOOGLE_API_KEY=AIza...
 GOOGLE_TIMEOUT=30
 
 # Default Model
-DEFAULT_MODEL=gemini-1.5-flash
+DEFAULT_MODEL=gemini-2.5-flash
 
 # CORS
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
@@ -2810,7 +2823,7 @@ services:
       - "8000:8000"
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - DEFAULT_MODEL=gemini-1.5-flash
+      - DEFAULT_MODEL=gemini-2.5-flash
       - CORS_ORIGINS=http://localhost:5173
     volumes:
       - ./backend:/app

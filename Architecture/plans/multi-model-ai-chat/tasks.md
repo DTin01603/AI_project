@@ -5,10 +5,10 @@
 Triển khai full-stack application bao gồm FastAPI backend với LangChain integration và React frontend. Backend sử dụng pipeline 5 bước tuần tự để xử lý chat requests, tích hợp với Google Gemini API. Frontend cung cấp giao diện web đơn giản cho người dùng tương tác với chat API.
 
 **Tech Stack**:
-- Backend: Python 3.11+, FastAPI, LangChain, Pydantic
-- Frontend: React 18, Vite, Axios
-- Testing: pytest, hypothesis, pytest-cov
-- Provider: Google Gemini (gemini-1.5-flash, gemini-1.5-pro)
+- Backend: Python 3.11+, FastAPI 0.116+, LangChain 0.3+, Pydantic 2.12+
+- Frontend: React 19, Vite 6, Axios 1.7+
+- Testing: pytest 9.0+, hypothesis 6.103+, pytest-cov 6.0+
+- Provider: Google Gemini (gemini-2.5-flash, gemini-2.5-flash-lite) via langchain-google-genai 4.0+
 
 ## Tasks
 
@@ -24,13 +24,13 @@ Triển khai full-stack application bao gồm FastAPI backend với LangChain in
     - _Yêu cầu: 12.1_
   
   - [ ] 1.3 Setup backend dependencies
-    - Tạo `requirements.txt` với: fastapi, uvicorn, pydantic, pydantic-settings, langchain, langchain-google-genai, structlog, python-dotenv
-    - Tạo `requirements-dev.txt` với: pytest, pytest-cov, pytest-mock, hypothesis, black, ruff, mypy
+    - Tạo `requirements.txt` với: fastapi==0.116.1, uvicorn[standard]==0.34.0, pydantic==2.12.5, pydantic-settings==2.7.1, langchain==0.3.26, langchain-google-genai==4.0.0, structlog==24.4.0, python-dotenv==1.0.1
+    - Tạo `requirements-dev.txt` với: pytest==9.0.2, pytest-cov==6.0.0, pytest-mock==3.14.0, hypothesis==6.103.1, black==24.10.0, ruff==0.8.4, mypy==1.13.0
     - Tạo `.env.example` với các biến môi trường cần thiết
     - _Yêu cầu: 8.1, 8.5, 8.6, 8.7_
   
   - [ ] 1.4 Setup frontend dependencies
-    - Tạo `package.json` với: react, react-dom, axios, vite
+    - Tạo `package.json` với: react==19.0.0, react-dom==19.0.0, axios==1.7.9, vite==6.0.5
     - Tạo `.env.example` với VITE_API_BASE_URL
     - Cấu hình Vite trong `vite.config.js`
     - _Yêu cầu: 12.1, 12.9_

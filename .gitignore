@@ -2,8 +2,7 @@
 .venv/
 node_modules/
 dist/
-app/
-tests/
+backend/
 frontend/
 .pytest_cache/
 .env
