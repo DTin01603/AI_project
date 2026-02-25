@@ -1,10 +1,32 @@
 # Tài liệu Thiết kế - Research Agent Phase 2
 
+## Migration to LangGraph
+
+**Update Summary**: This design has been updated to use **LangGraph StateGraph** instead of LangChain ReAct Agent for better agent orchestration.
+
+**Key Changes**:
+- ✅ Replaced ReAct Agent with LangGraph StateGraph
+- ✅ Added AgentState TypedDict for explicit state management
+- ✅ Converted Smart Router to router_node with conditional edges
+- ✅ Implemented tool execution as graph nodes (web_search_node, rag_node, calculator_node, direct_llm_node)
+- ✅ Added citation_node for final answer formatting
+- ✅ Integrated SqliteSaver checkpointer for conversation memory
+- ✅ All 36 correctness properties remain unchanged
+- ✅ All functional requirements preserved
+
+**Benefits of LangGraph**:
+- Clear state management through TypedDict schema
+- Visual graph structure for debugging (mermaid diagrams)
+- Built-in checkpointing for conversation memory
+- Easier error handling and retry logic in nodes
+- Better separation of concerns (each node = one responsibility)
+- Streaming support for real-time updates (future enhancement)
+
 ## Tổng quan
 
 Research Agent Phase 2 nâng cấp hệ thống chat AI cơ bản (Phase 1) thành một intelligent research agent với khả năng tự động tìm kiếm thông tin từ web, truy xuất dữ liệu từ documents đã upload, thực hiện tính toán toán học, và orchestrate nhiều tools để trả lời câu hỏi một cách chính xác và có nguồn gốc rõ ràng.
 
-Hệ thống sử dụng LangChain ReAct (Reasoning and Acting) pattern để tự động phân loại câu hỏi và chọn tool phù hợp:
+Hệ thống sử dụng **LangGraph StateGraph** để orchestrate agent workflow với state management rõ ràng và conditional routing:
 - **Web Search Tool**: Tìm kiếm thông tin real-time từ internet (Tavily/SerpAPI)
 - **RAG System**: Truy xuất và answer từ documents đã upload (Chroma/Pinecone)
 - **Calculator Tool**: Xử lý tính toán toán học phức tạp
@@ -16,16 +38,26 @@ Hệ thống sử dụng LangChain ReAct (Reasoning and Acting) pattern để t�
 - **Source Attribution**: Mọi thông tin đều có citation rõ ràng
 - **Graceful Degradation**: Fallback khi tools fail
 - **Conversation Context**: Nhớ lịch sử hội thoại để xử lý follow-up questions
-- **Extensible**: Dễ dàng thêm tools mới
+- **Extensible**: Dễ dàng thêm tools mới (add nodes to graph)
 - **Performance**: Response time tối ưu cho từng loại query
+- **Debuggable**: LangGraph visualization giúp debug agent flow
 
 ### Kiến trúc tổng quan
 
-Phase 2 mở rộng Phase 1 pipeline bằng cách thêm một layer tool orchestration trước khi invoke model:
+Phase 2 mở rộng Phase 1 pipeline bằng cách thêm một LangGraph StateGraph orchestration layer:
 
 ```
-User Question → Smart Router → Tool Selection → Tool Execution → Answer Synthesis → Citation → Response
+User Question → Router Node → Conditional Edge → Tool Node → Citation Node → Response
+                    ↓                                ↓
+                State Update                    State Update
 ```
+
+**LangGraph Benefits**:
+- Clear state management through TypedDict schema
+- Visual graph structure for debugging
+- Built-in checkpointing for conversation memory
+- Easier error handling and retry logic in nodes
+- Better separation of concerns (each node = one responsibility)
 
 ## Kiến trúc
 
@@ -40,26 +72,35 @@ graph TB
     User -->|interact| Frontend
     Frontend -->|HTTP/JSON| API
     
-    subgraph Phase2["Research Agent Phase 2"]
-        Router[Smart Router]
-        WebSearch[Web Search Tool]
-        RAG[RAG System]
-        Calc[Calculator Tool]
-        LLM[Direct LLM]
-        Memory[Conversation Memory]
-        Citation[Citation System]
+    subgraph Phase2["Research Agent Phase 2 - LangGraph"]
+        Entry[Entry Point]
+        Router[Router Node]
+        WebSearch[Web Search Node]
+        RAG[RAG Node]
+        Calc[Calculator Node]
+        LLM[Direct LLM Node]
+        Citation[Citation Node]
+        End[END]
         
-        Router -->|real-time info| WebSearch
-        Router -->|document question| RAG
-        Router -->|calculation| Calc
-        Router -->|general knowledge| LLM
+        Entry -->|initial state| Router
+        Router -->|conditional edge| WebSearch
+        Router -->|conditional edge| RAG
+        Router -->|conditional edge| Calc
+        Router -->|conditional edge| LLM
         
         WebSearch --> Citation
         RAG --> Citation
         Calc --> Citation
         LLM --> Citation
+        Citation --> End
         
-        Memory -.->|context| Router
+        State[AgentState<br/>messages, query_type,<br/>tool_results, citations]
+        State -.->|read/write| Router
+        State -.->|read/write| WebSearch
+        State -.->|read/write| RAG
+        State -.->|read/write| Calc
+        State -.->|read/write| LLM
+        State -.->|read/write| Citation
     end
     
     subgraph External["External Services"]
@@ -72,8 +113,8 @@ graph TB
     RAG --> VectorDB
     LLM --> Gemini
     
-    API --> Router
-    Citation --> API
+    API --> Entry
+    End --> API
 ```
 
 ### Data Flow - Research Query
@@ -81,37 +122,47 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant R as Smart Router
-    participant WS as Web Search Tool
-    participant RAG as RAG System
-    participant C as Calculator
-    participant LLM as Direct LLM
-    participant CS as Citation System
-    participant M as Memory
+    participant G as LangGraph
+    participant RN as Router Node
+    participant WS as Web Search Node
+    participant CN as Citation Node
+    participant S as AgentState
     
-    U->>R: "What's the current Bitcoin price?"
-    R->>M: Get conversation context
-    M-->>R: Previous messages
-    R->>R: Classify as real_time_info
-    R->>WS: Execute search
-    WS->>WS: Query Tavily API
-    WS-->>R: Search results
-    R->>LLM: Synthesize answer with results
-    LLM-->>R: Generated answer
-    R->>CS: Add citations
-    CS-->>R: Answer with [Source: URL]
-    R->>M: Store in history
-    R-->>U: Final response
+    U->>G: "What's the current Bitcoin price?"
+    G->>S: Initialize state with messages
+    G->>RN: Invoke router_node(state)
+    RN->>S: Read messages, conversation history
+    RN->>RN: Classify as real_time_info
+    RN->>S: Update state.query_type = "web_search"
+    RN-->>G: Return updated state
+    
+    G->>G: Evaluate conditional edge
+    G->>WS: Route to web_search_node(state)
+    WS->>WS: Execute Tavily search
+    WS->>S: Update state.tool_results
+    WS-->>G: Return updated state
+    
+    G->>CN: Invoke citation_node(state)
+    CN->>S: Read tool_results
+    CN->>CN: Format citations
+    CN->>S: Update state.citations, final answer
+    CN-->>G: Return updated state
+    
+    G->>G: Reach END node
+    G-->>U: Final response with citations
 ```
 
 ### Component Interaction
 
 ```mermaid
 graph LR
-    subgraph Core Components
-        SR[Smart Router]
-        TE[Tool Executor]
-        AS[Answer Synthesizer]
+    subgraph LangGraph Core
+        SG[StateGraph]
+        AS[AgentState Schema]
+        RN[Router Node]
+        TN[Tool Nodes]
+        CN[Citation Node]
+        CE[Conditional Edges]
     end
     
     subgraph Tools
@@ -131,28 +182,382 @@ graph LR
     subgraph Storage
         VDB[Vector Database]
         Cache[Query Cache]
-        Session[Session Store]
+        CP[Checkpointer]
     end
     
-    SR --> TE
-    TE --> WST
-    TE --> RAGS
-    TE --> CT
-    TE --> DLLM
-    TE --> AS
-    AS --> CS
+    SG --> AS
+    SG --> RN
+    SG --> TN
+    SG --> CN
+    SG --> CE
     
-    CM --> Session
+    TN --> WST
+    TN --> RAGS
+    TN --> CT
+    TN --> DLLM
+    CN --> CS
+    
+    CM --> CP
     RAGS --> VDB
     DP --> ES
     ES --> VDB
-    SR -.->|context| CM
-    SR -.->|check| Cache
+    RN -.->|read state| AS
+    TN -.->|update state| AS
+    SG -.->|persist| CP
 ```
 
 ## Components và Interfaces
 
-### 1. Smart Router
+### 0. LangGraph State Schema
+
+**Trách nhiệm**: Define the state structure that flows through the graph.
+
+**State Definition**:
+```python
+from typing import TypedDict, Annotated, Sequence, Optional, Dict, Any, List
+from langchain_core.messages import BaseMessage
+from langgraph.graph import add_messages
+
+class AgentState(TypedDict):
+    """State schema for the research agent graph."""
+    
+    # Conversation messages (with automatic message aggregation)
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    
+    # Routing information
+    query_type: str  # "web_search", "rag", "calculator", "direct_llm"
+    routing_confidence: float
+    routing_reasoning: str
+    
+    # Tool execution results
+    tool_results: Dict[str, Any]  # Stores results from tool nodes
+    
+    # Citations and final answer
+    citations: List[Citation]
+    final_answer: str
+    
+    # Metadata
+    user_id: Optional[str]
+    conversation_id: str
+    execution_time_ms: float
+    
+    # Error handling
+    error: Optional[str]
+    fallback_used: bool
+```
+
+**Key Features**:
+- `add_messages` reducer automatically handles message history
+- State is immutable - each node returns updated copy
+- All nodes read from and write to this shared state
+- Checkpointer can persist state for conversation memory
+
+### 1. LangGraph Workflow
+
+**Trách nhiệm**: Orchestrate the entire research agent flow using StateGraph.
+
+**Graph Construction**:
+```python
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+class ResearchAgentGraph:
+    def __init__(
+        self,
+        llm: BaseChatModel,
+        web_search_tool: WebSearchTool,
+        rag_system: RAGSystem,
+        calculator_tool: CalculatorTool,
+        citation_system: CitationSystem
+    ):
+        self.llm = llm
+        self.web_search_tool = web_search_tool
+        self.rag_system = rag_system
+        self.calculator_tool = calculator_tool
+        self.citation_system = citation_system
+        
+        # Build the graph
+        self.workflow = self._build_graph()
+        
+        # Compile with checkpointer for memory
+        memory = SqliteSaver.from_conn_string(":memory:")
+        self.app = self.workflow.compile(checkpointer=memory)
+    
+    def _build_graph(self) -> StateGraph:
+        """Construct the LangGraph StateGraph."""
+        workflow = StateGraph(AgentState)
+        
+        # Add nodes
+        workflow.add_node("router", self.router_node)
+        workflow.add_node("web_search", self.web_search_node)
+        workflow.add_node("rag", self.rag_node)
+        workflow.add_node("calculator", self.calculator_node)
+        workflow.add_node("direct_llm", self.direct_llm_node)
+        workflow.add_node("citation", self.citation_node)
+        
+        # Set entry point
+        workflow.set_entry_point("router")
+        
+        # Add conditional edges from router
+        workflow.add_conditional_edges(
+            "router",
+            self.route_query,
+            {
+                "web_search": "web_search",
+                "rag": "rag",
+                "calculator": "calculator",
+                "direct_llm": "direct_llm"
+            }
+        )
+        
+        # All tool nodes go to citation
+        workflow.add_edge("web_search", "citation")
+        workflow.add_edge("rag", "citation")
+        workflow.add_edge("calculator", "citation")
+        workflow.add_edge("direct_llm", "citation")
+        
+        # Citation goes to END
+        workflow.add_edge("citation", END)
+        
+        return workflow
+    
+    # Node implementations
+    def router_node(self, state: AgentState) -> AgentState:
+        """Classify the query and determine which tool to use."""
+        messages = state["messages"]
+        last_message = messages[-1].content
+        
+        # Use LLM to classify
+        classification_prompt = f"""Phân loại câu hỏi sau vào một trong các category:
+- general_knowledge: Kiến thức chung
+- real_time_info: Thông tin real-time (giá cả, tin tức, thời tiết)
+- document_based: Hỏi về documents đã upload
+- calculation: Tính toán toán học
+
+Câu hỏi: {last_message}
+
+Trả lời JSON: {{"category": "...", "confidence": 0.0-1.0, "reasoning": "..."}}"""
+        
+        response = self.llm.invoke(classification_prompt)
+        result = json.loads(response.content)
+        
+        # Map category to query_type
+        category_map = {
+            "general_knowledge": "direct_llm",
+            "real_time_info": "web_search",
+            "document_based": "rag",
+            "calculation": "calculator"
+        }
+        
+        query_type = category_map.get(result["category"], "direct_llm")
+        
+        logger.info(
+            "routing_decision",
+            question=last_message[:100],
+            query_type=query_type,
+            confidence=result["confidence"]
+        )
+        
+        return {
+            **state,
+            "query_type": query_type,
+            "routing_confidence": result["confidence"],
+            "routing_reasoning": result["reasoning"]
+        }
+    
+    def route_query(self, state: AgentState) -> str:
+        """Conditional edge function - returns next node name."""
+        return state["query_type"]
+    
+    def web_search_node(self, state: AgentState) -> AgentState:
+        """Execute web search and synthesize answer."""
+        start_time = time.time()
+        messages = state["messages"]
+        question = messages[-1].content
+        
+        try:
+            # Execute search
+            search_response = self.web_search_tool.execute(
+                SearchQuery(query=question, max_results=5)
+            )
+            
+            # Synthesize answer from results
+            context = "\n\n".join([
+                f"{r.title}: {r.snippet}" for r in search_response.results
+            ])
+            answer_prompt = f"Context:\n{context}\n\nQuestion: {question}\n\nTrả lời ngắn gọn:"
+            answer = self.llm.invoke(answer_prompt).content
+            
+            execution_time = (time.time() - start_time) * 1000
+            
+            return {
+                **state,
+                "tool_results": {
+                    "tool_name": "web_search",
+                    "answer": answer,
+                    "search_results": search_response.results,
+                    "success": True
+                },
+                "execution_time_ms": execution_time,
+                "fallback_used": False
+            }
+            
+        except Exception as e:
+            logger.error(f"Web search failed: {e}")
+            # Fallback to direct LLM
+            return self.direct_llm_node({**state, "fallback_used": True})
+    
+    def rag_node(self, state: AgentState) -> AgentState:
+        """Execute RAG retrieval and answer generation."""
+        start_time = time.time()
+        messages = state["messages"]
+        question = messages[-1].content
+        
+        try:
+            rag_response = self.rag_system.query(
+                RAGQuery(
+                    question=question,
+                    user_id=state.get("user_id"),
+                    conversation_id=state["conversation_id"],
+                    top_k=5,
+                    similarity_threshold=0.7
+                )
+            )
+            
+            execution_time = (time.time() - start_time) * 1000
+            
+            return {
+                **state,
+                "tool_results": {
+                    "tool_name": "rag",
+                    "answer": rag_response.answer,
+                    "retrieved_chunks": rag_response.retrieved_chunks,
+                    "has_relevant_context": rag_response.has_relevant_context,
+                    "success": rag_response.has_relevant_context
+                },
+                "execution_time_ms": execution_time,
+                "fallback_used": False
+            }
+            
+        except Exception as e:
+            logger.error(f"RAG failed: {e}")
+            return self.direct_llm_node({**state, "fallback_used": True})
+    
+    def calculator_node(self, state: AgentState) -> AgentState:
+        """Execute mathematical calculation."""
+        start_time = time.time()
+        messages = state["messages"]
+        question = messages[-1].content
+        
+        result = self.calculator_tool.execute(
+            CalculationQuery(expression="", natural_language=question)
+        )
+        
+        execution_time = (time.time() - start_time) * 1000
+        
+        if result.success:
+            answer = f"Kết quả: {result.formatted_result}"
+        else:
+            answer = f"Không thể tính toán: {result.error_message}"
+        
+        return {
+            **state,
+            "tool_results": {
+                "tool_name": "calculator",
+                "answer": answer,
+                "calculation_result": result,
+                "success": result.success
+            },
+            "execution_time_ms": execution_time,
+            "fallback_used": False
+        }
+    
+    def direct_llm_node(self, state: AgentState) -> AgentState:
+        """Answer using direct LLM without tools."""
+        start_time = time.time()
+        messages = state["messages"]
+        
+        # Use conversation history
+        response = self.llm.invoke(messages)
+        answer = response.content
+        
+        execution_time = (time.time() - start_time) * 1000
+        
+        fallback_prefix = "[Fallback Mode] " if state.get("fallback_used") else ""
+        
+        return {
+            **state,
+            "tool_results": {
+                "tool_name": "direct_llm",
+                "answer": fallback_prefix + answer,
+                "success": True
+            },
+            "execution_time_ms": execution_time
+        }
+    
+    def citation_node(self, state: AgentState) -> AgentState:
+        """Add citations to the answer."""
+        tool_results = state["tool_results"]
+        answer = tool_results["answer"]
+        tool_name = tool_results["tool_name"]
+        
+        citations = []
+        
+        if tool_name == "web_search" and "search_results" in tool_results:
+            cited = self.citation_system.add_web_citations(
+                answer, tool_results["search_results"]
+            )
+            answer = cited.formatted_answer
+            citations = cited.citations
+        
+        elif tool_name == "rag" and "retrieved_chunks" in tool_results:
+            if tool_results["has_relevant_context"]:
+                cited = self.citation_system.add_document_citations(
+                    answer, tool_results["retrieved_chunks"]
+                )
+                answer = cited.formatted_answer
+                citations = cited.citations
+        
+        return {
+            **state,
+            "final_answer": answer,
+            "citations": citations
+        }
+    
+    async def ainvoke(self, question: str, conversation_id: str, user_id: Optional[str] = None):
+        """Invoke the graph asynchronously."""
+        initial_state = {
+            "messages": [{"role": "user", "content": question}],
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "query_type": "",
+            "routing_confidence": 0.0,
+            "routing_reasoning": "",
+            "tool_results": {},
+            "citations": [],
+            "final_answer": "",
+            "execution_time_ms": 0.0,
+            "error": None,
+            "fallback_used": False
+        }
+        
+        # Invoke with checkpointing
+        config = {"configurable": {"thread_id": conversation_id}}
+        result = await self.app.ainvoke(initial_state, config)
+        
+        return result
+```
+
+**Key LangGraph Concepts**:
+- **StateGraph**: Defines nodes and edges with typed state
+- **Nodes**: Functions that take state and return updated state
+- **Conditional Edges**: Dynamic routing based on state values
+- **Checkpointer**: Persists state for conversation memory
+- **add_messages**: Built-in reducer for message history
+
+### 2. Smart Router (Legacy - Now Router Node)
+
+**Note**: The Smart Router functionality is now implemented as the `router_node` in the LangGraph workflow above. This section is kept for reference.
 
 **Trách nhiệm**: Phân loại câu hỏi và quyết định tool nào cần sử dụng.
 
@@ -187,82 +592,7 @@ class QuestionCategory(str, Enum):
     CALCULATION = "calculation"
 ```
 
-**Classification Logic**:
-
-```python
-class SmartRouter:
-    def __init__(self, llm: BaseChatModel, memory: ConversationMemory):
-        self.llm = llm
-        self.memory = memory
-        self.classification_prompt = self._build_classification_prompt()
-    
-    def route(self, question: str, conversation_id: str) -> RoutingDecision:
-        # Get conversation context
-        history = self.memory.get_history(conversation_id)
-        
-        # Build classification prompt
-        prompt = self.classification_prompt.format(
-            question=question,
-            history=self._format_history(history)
-        )
-        
-        # Use LLM to classify
-        response = self.llm.invoke(prompt)
-        category = self._parse_category(response)
-        
-        # Map category to tools
-        tools = self._map_category_to_tools(category)
-        
-        # Log decision
-        logger.info(
-            "routing_decision",
-            question=question[:100],
-            category=category,
-            tools=tools,
-            confidence=self._calculate_confidence(response)
-        )
-        
-        return RoutingDecision(
-            question_category=category,
-            selected_tools=tools,
-            confidence=self._calculate_confidence(response),
-            reasoning=self._extract_reasoning(response)
-        )
-    
-    def _map_category_to_tools(self, category: QuestionCategory) -> List[str]:
-        mapping = {
-            QuestionCategory.GENERAL_KNOWLEDGE: ["direct_llm"],
-            QuestionCategory.REAL_TIME_INFO: ["web_search"],
-            QuestionCategory.DOCUMENT_BASED: ["rag"],
-            QuestionCategory.CALCULATION: ["calculator"]
-        }
-        return mapping.get(category, ["direct_llm"])
-```
-
-**Classification Prompt Template**:
-```
-Bạn là một AI router chuyên phân loại câu hỏi. Phân tích câu hỏi sau và xác định category:
-
-Categories:
-- general_knowledge: Kiến thức chung, không cần thông tin real-time hay documents
-- real_time_info: Cần thông tin cập nhật (giá cả, tin tức, thời tiết, sự kiện hiện tại)
-- document_based: Hỏi về nội dung documents đã upload
-- calculation: Tính toán toán học
-
-Conversation History:
-{history}
-
-Question: {question}
-
-Trả lời theo format JSON:
-{{
-  "category": "...",
-  "confidence": 0.0-1.0,
-  "reasoning": "..."
-}}
-```
-
-### 2. Web Search Tool
+### 3. Web Search Tool
 
 **Trách nhiệm**: Tìm kiếm thông tin real-time từ internet.
 
@@ -364,7 +694,7 @@ class WebSearchTool:
 - No results → Return empty list, let answer synthesizer handle
 - Rate limit → Raise `RateLimitError`, queue request
 
-### 3. Document Processor
+### 4. Document Processor
 
 **Trách nhiệm**: Xử lý upload, extract text, chunk, và embed documents.
 
@@ -485,7 +815,7 @@ class DocumentProcessor:
             )
 ```
 
-### 4. RAG System
+### 5. RAG System
 
 **Trách nhiệm**: Semantic search trong documents và generate answer với context.
 
@@ -592,7 +922,7 @@ class RAGSystem:
         ])
 ```
 
-### 5. Calculator Tool
+### 6. Calculator Tool
 
 **Trách nhiệm**: Parse và evaluate mathematical expressions.
 
@@ -694,9 +1024,11 @@ class CalculatorTool:
 ```
 
 
-### 6. Conversation Memory
+### 7. Conversation Memory
 
 **Trách nhiệm**: Lưu trữ và quản lý lịch sử hội thoại.
+
+**Note**: With LangGraph, conversation memory is handled by the Checkpointer. This component is kept for backward compatibility and non-graph usage.
 
 **Data Models**:
 ```python
@@ -768,7 +1100,7 @@ class ConversationMemory:
         return "\n".join(formatted)
 ```
 
-### 7. Citation System
+### 8. Citation System
 
 **Trách nhiệm**: Format và add citations vào answers.
 
@@ -861,7 +1193,7 @@ class CitationSystem:
 ```
 
 
-### 8. Embedding Service
+### 9. Embedding Service
 
 **Trách nhiệm**: Generate vector embeddings cho text.
 
@@ -889,7 +1221,7 @@ class EmbeddingService:
         return 768
 ```
 
-### 9. Vector Database Interface
+### 10. Vector Database Interface
 
 **Trách nhiệm**: Abstract interface cho vector storage (Chroma/Pinecone).
 
@@ -1220,7 +1552,7 @@ Health check for research agent tools.
 
 ### Extending Phase 1 Pipeline
 
-Phase 2 extends Phase 1 by adding a tool orchestration layer:
+Phase 2 extends Phase 1 by adding a LangGraph orchestration layer:
 
 ```python
 # Phase 1 Pipeline
@@ -1232,197 +1564,134 @@ class ChatPipeline:
         response = self.compose_service.compose(result)
         return self.deliver_service.deliver(response)
 
-# Phase 2 Enhanced Pipeline
+# Phase 2 Enhanced Pipeline with LangGraph
 class ResearchChatPipeline(ChatPipeline):
-    def __init__(self, *args, research_orchestrator: ResearchOrchestrator, **kwargs):
+    def __init__(self, *args, research_graph: ResearchAgentGraph, **kwargs):
         super().__init__(*args, **kwargs)
-        self.research_orchestrator = research_orchestrator
+        self.research_graph = research_graph
     
-    def process(self, request: ResearchChatRequest) -> ResearchChatResponse:
+    async def process(self, request: ResearchChatRequest) -> ResearchChatResponse:
         captured = self.capture_service.capture(request)
         normalized = self.normalize_service.normalize(captured)
         
-        # NEW: Research orchestration
-        research_result = self.research_orchestrator.execute(
+        # NEW: LangGraph orchestration
+        graph_result = await self.research_graph.ainvoke(
             question=normalized.message,
-            conversation_id=request.conversation_id,
+            conversation_id=request.conversation_id or str(uuid.uuid4()),
             user_id=request.user_id
         )
         
-        # Compose with citations
-        response = self.compose_service.compose_with_citations(research_result)
+        # Compose response from graph state
+        response = self.compose_service.compose_from_graph_state(graph_result)
         return self.deliver_service.deliver(response)
 ```
 
+### Using the LangGraph Agent
 
-### Research Orchestrator
-
-**Trách nhiệm**: Coordinate tool selection và execution.
-
+**Basic Usage**:
 ```python
-class ResearchOrchestrator:
-    def __init__(
-        self,
-        router: SmartRouter,
-        web_search: WebSearchTool,
-        rag_system: RAGSystem,
-        calculator: CalculatorTool,
-        llm: BaseChatModel,
-        memory: ConversationMemory,
-        citation_system: CitationSystem
-    ):
-        self.router = router
-        self.tools = {
-            "web_search": web_search,
-            "rag": rag_system,
-            "calculator": calculator,
-            "direct_llm": llm
-        }
-        self.memory = memory
-        self.citation_system = citation_system
-    
-    async def execute(
-        self,
-        question: str,
-        conversation_id: str,
-        user_id: str
-    ) -> ResearchResult:
-        start_time = time.time()
-        
-        # Store user message
-        self.memory.add_message(
-            conversation_id,
-            Message(role="user", content=question, timestamp=datetime.utcnow())
-        )
-        
-        # Route question
-        routing = self.router.route(question, conversation_id)
-        
-        # Execute tools
-        tool_results = []
-        answer = ""
-        citations = []
-        
-        try:
-            if "web_search" in routing.selected_tools:
-                result = await self._execute_web_search(question)
-                tool_results.append(result)
-                answer = result.answer
-                citations = result.citations
-            
-            elif "rag" in routing.selected_tools:
-                result = await self._execute_rag(question, user_id, conversation_id)
-                tool_results.append(result)
-                answer = result.answer
-                citations = result.citations
-            
-            elif "calculator" in routing.selected_tools:
-                result = await self._execute_calculator(question)
-                tool_results.append(result)
-                answer = result.answer
-            
-            else:  # direct_llm
-                result = await self._execute_direct_llm(question, conversation_id)
-                tool_results.append(result)
-                answer = result.answer
-        
-        except Exception as e:
-            logger.error(f"Tool execution failed: {e}")
-            # Fallback to direct LLM
-            result = await self._execute_direct_llm(question, conversation_id)
-            tool_results.append(result)
-            answer = f"[Fallback] {result.answer}"
-        
-        # Store assistant message
-        self.memory.add_message(
-            conversation_id,
-            Message(role="assistant", content=answer, timestamp=datetime.utcnow())
-        )
-        
-        execution_time_ms = (time.time() - start_time) * 1000
-        
-        return ResearchResult(
-            question=question,
-            answer=answer,
-            citations=citations,
-            question_category=routing.question_category,
-            tools_used=tool_results,
-            execution_time_ms=execution_time_ms
-        )
-    
-    async def _execute_web_search(self, question: str) -> ToolResult:
-        start_time = time.time()
-        try:
-            search_response = await self.tools["web_search"].execute(
-                SearchQuery(query=question, max_results=5)
-            )
-            
-            # Synthesize answer from search results
-            context = "\n\n".join([
-                f"{r.title}: {r.snippet}" for r in search_response.results
-            ])
-            answer = await self._synthesize_answer(question, context)
-            
-            # Add citations
-            cited = self.citation_system.add_web_citations(answer, search_response.results)
-            
-            return ToolResult(
-                tool_name="web_search",
-                answer=cited.formatted_answer,
-                citations=cited.citations,
-                execution_time_ms=(time.time() - start_time) * 1000,
-                success=True
-            )
-        except Exception as e:
-            logger.error(f"Web search failed: {e}")
-            raise
-    
-    async def _execute_rag(self, question: str, user_id: str, conversation_id: str) -> ToolResult:
-        start_time = time.time()
-        try:
-            rag_response = await self.tools["rag"].query(
-                RAGQuery(
-                    question=question,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    top_k=5,
-                    similarity_threshold=0.7
-                )
-            )
-            
-            if not rag_response.has_relevant_context:
-                return ToolResult(
-                    tool_name="rag",
-                    answer=rag_response.answer,
-                    citations=[],
-                    execution_time_ms=(time.time() - start_time) * 1000,
-                    success=False
-                )
-            
-            # Add citations
-            cited = self.citation_system.add_document_citations(
-                rag_response.answer,
-                rag_response.retrieved_chunks
-            )
-            
-            return ToolResult(
-                tool_name="rag",
-                answer=cited.formatted_answer,
-                citations=cited.citations,
-                execution_time_ms=(time.time() - start_time) * 1000,
-                success=True
-            )
-        except Exception as e:
-            logger.error(f"RAG failed: {e}")
-            raise
-    
-    async def _synthesize_answer(self, question: str, context: str) -> str:
-        prompt = f"Context:\n{context}\n\nQuestion: {question}\n\nTrả lời ngắn gọn dựa trên context:"
-        response = await self.tools["direct_llm"].ainvoke(prompt)
-        return response.content
+# Initialize the graph
+research_graph = ResearchAgentGraph(
+    llm=ChatGoogleGenerativeAI(model="gemini-1.5-flash"),
+    web_search_tool=WebSearchTool(provider=TavilySearchProvider(api_key=...)),
+    rag_system=RAGSystem(...),
+    calculator_tool=CalculatorTool(),
+    citation_system=CitationSystem()
+)
+
+# Invoke the graph
+result = await research_graph.ainvoke(
+    question="What's the current Bitcoin price?",
+    conversation_id="conv_123",
+    user_id="user_456"
+)
+
+# Access results
+print(result["final_answer"])
+print(result["citations"])
+print(result["query_type"])  # "web_search"
+print(result["execution_time_ms"])
+```
+
+**With Conversation Memory**:
+```python
+# The checkpointer automatically handles conversation memory
+# Just use the same conversation_id for follow-up questions
+
+# First question
+result1 = await research_graph.ainvoke(
+    question="What is Bitcoin?",
+    conversation_id="conv_123",
+    user_id="user_456"
+)
+
+# Follow-up question - graph remembers context
+result2 = await research_graph.ainvoke(
+    question="What's its current price?",  # "its" refers to Bitcoin
+    conversation_id="conv_123",  # Same conversation_id
+    user_id="user_456"
+)
+```
+
+**Visualizing the Graph**:
+```python
+# LangGraph provides built-in visualization
+from IPython.display import Image, display
+
+# Get the graph visualization
+display(Image(research_graph.app.get_graph().draw_mermaid_png()))
+```
+
+**Streaming Support** (Future Enhancement):
+```python
+# LangGraph supports streaming for real-time updates
+async for event in research_graph.app.astream(initial_state, config):
+    if "router" in event:
+        print(f"Routing to: {event['router']['query_type']}")
+    elif "web_search" in event:
+        print(f"Search completed: {len(event['web_search']['tool_results']['search_results'])} results")
+    elif "citation" in event:
+        print(f"Final answer: {event['citation']['final_answer']}")
 ```
 
 ## Configuration
+
+### Dependencies
+
+```python
+# requirements.txt
+
+# Phase 1 dependencies (inherited)
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+langchain==0.1.0
+langchain-google-genai==0.0.6
+python-dotenv==1.0.0
+
+# Phase 2 - LangGraph
+langgraph==0.0.20  # NEW: LangGraph for agent orchestration
+langchain-core==0.1.10  # Required by LangGraph
+
+# Web Search
+tavily-python==0.3.0
+google-search-results==2.4.2  # SerpAPI
+
+# Vector Database
+chromadb==0.4.18
+pinecone-client==2.2.4
+
+# Document Processing
+pypdf==3.17.1
+python-docx==1.1.0
+unstructured==0.11.0
+python-magic==0.4.27
+
+# Utilities
+aiofiles==23.2.1
+httpx==0.25.2
+```
 
 ### Environment Variables
 
@@ -1445,6 +1714,10 @@ class ResearchSettings(BaseSettings):
     pinecone_api_key: Optional[str] = None
     pinecone_environment: Optional[str] = None
     pinecone_index_name: str = "research-agent"
+    
+    # LangGraph
+    langgraph_checkpointer: str = "sqlite"  # "sqlite" or "postgres"
+    langgraph_db_path: str = ":memory:"  # or "./checkpoints.db"
     
     # Document Processing
     max_file_size_mb: int = 10
@@ -1486,6 +1759,10 @@ WEB_SEARCH_PROVIDER=tavily
 # Vector Database
 VECTOR_DB_TYPE=chroma
 CHROMA_PERSIST_DIRECTORY=./chroma_db
+
+# LangGraph
+LANGGRAPH_CHECKPOINTER=sqlite
+LANGGRAPH_DB_PATH=./checkpoints.db
 
 # Document Processing
 MAX_FILE_SIZE_MB=10
@@ -2025,7 +2302,116 @@ Feature: research-agent, Property {number}: {property_text}
 
 ### Unit Testing Strategy
 
-#### 1. Smart Router Tests
+#### 0. LangGraph Tests
+
+**Test cases**:
+- ✅ Graph compiles successfully
+- ✅ State schema validation
+- ✅ Router node updates state correctly
+- ✅ Conditional edges route to correct nodes
+- ✅ Tool nodes update state with results
+- ✅ Citation node formats final answer
+- ✅ Checkpointer persists conversation state
+- ✅ Graph handles errors in nodes gracefully
+
+**Example**:
+```python
+@pytest.mark.asyncio
+async def test_langgraph_compiles():
+    graph = ResearchAgentGraph(
+        llm=mock_llm,
+        web_search_tool=mock_web_search,
+        rag_system=mock_rag,
+        calculator_tool=mock_calculator,
+        citation_system=mock_citation
+    )
+    
+    # Should compile without errors
+    assert graph.app is not None
+    assert graph.workflow is not None
+
+@pytest.mark.asyncio
+async def test_router_node_updates_state():
+    graph = ResearchAgentGraph(...)
+    
+    initial_state = {
+        "messages": [{"role": "user", "content": "What's the Bitcoin price?"}],
+        "conversation_id": "test_conv",
+        "query_type": "",
+        "routing_confidence": 0.0,
+        "routing_reasoning": "",
+        "tool_results": {},
+        "citations": [],
+        "final_answer": "",
+        "execution_time_ms": 0.0,
+        "error": None,
+        "fallback_used": False
+    }
+    
+    updated_state = graph.router_node(initial_state)
+    
+    # Router should set query_type
+    assert updated_state["query_type"] in ["web_search", "rag", "calculator", "direct_llm"]
+    assert updated_state["routing_confidence"] > 0.0
+    assert len(updated_state["routing_reasoning"]) > 0
+
+@pytest.mark.asyncio
+async def test_conditional_edge_routing():
+    graph = ResearchAgentGraph(...)
+    
+    # Test web_search routing
+    state_web = {"query_type": "web_search", "messages": [], "conversation_id": "test"}
+    assert graph.route_query(state_web) == "web_search"
+    
+    # Test rag routing
+    state_rag = {"query_type": "rag", "messages": [], "conversation_id": "test"}
+    assert graph.route_query(state_rag) == "rag"
+    
+    # Test calculator routing
+    state_calc = {"query_type": "calculator", "messages": [], "conversation_id": "test"}
+    assert graph.route_query(state_calc) == "calculator"
+
+@pytest.mark.asyncio
+async def test_graph_end_to_end():
+    graph = ResearchAgentGraph(...)
+    
+    result = await graph.ainvoke(
+        question="What is 2 + 2?",
+        conversation_id="test_conv",
+        user_id="test_user"
+    )
+    
+    # Should have final answer
+    assert result["final_answer"] != ""
+    # Should have routed to calculator
+    assert result["query_type"] == "calculator"
+    # Should have tool results
+    assert "tool_results" in result
+    assert result["tool_results"]["tool_name"] == "calculator"
+
+@pytest.mark.asyncio
+async def test_checkpointer_persists_state():
+    graph = ResearchAgentGraph(...)
+    
+    # First invocation
+    result1 = await graph.ainvoke(
+        question="What is Bitcoin?",
+        conversation_id="persist_test",
+        user_id="test_user"
+    )
+    
+    # Second invocation with same conversation_id
+    result2 = await graph.ainvoke(
+        question="What's its price?",
+        conversation_id="persist_test",  # Same ID
+        user_id="test_user"
+    )
+    
+    # Second invocation should have access to first message in history
+    assert len(result2["messages"]) > 2  # At least 2 exchanges
+```
+
+#### 1. Smart Router Tests (Legacy)
 
 **Test cases**:
 - ✅ Real-time question → routes to web_search
@@ -2055,7 +2441,7 @@ def test_router_logs_decision(caplog):
     assert "category" in caplog.text
 ```
 
-#### 2. Web Search Tool Tests
+#### 3. Web Search Tool Tests
 
 **Test cases**:
 - ✅ Successful search returns results
@@ -2098,7 +2484,7 @@ async def test_web_search_timeout(mocker):
         await tool.execute(SearchQuery(query="test", max_results=5))
 ```
 
-#### 3. Document Processor Tests
+#### 4. Document Processor Tests
 
 **Test cases**:
 - ✅ Valid PDF upload succeeds
@@ -2157,7 +2543,7 @@ async def test_document_processor_file_too_large():
     assert "too large" in result.error_message.lower()
 ```
 
-#### 4. RAG System Tests
+#### 5. RAG System Tests
 
 **Test cases**:
 - ✅ Query generates embedding
@@ -2236,7 +2622,7 @@ async def test_rag_system_no_relevant_context(mocker):
     assert "không tìm thấy" in response.answer.lower()
 ```
 
-#### 5. Calculator Tool Tests
+#### 6. Calculator Tool Tests
 
 **Test cases**:
 - ✅ Basic arithmetic: 2 + 3 = 5
@@ -2294,7 +2680,7 @@ def test_calculator_invalid_expression():
     assert result.error_message is not None
 ```
 
-#### 6. Conversation Memory Tests
+#### 7. Conversation Memory Tests
 
 **Test cases**:
 - ✅ Add message stores in memory
@@ -2303,6 +2689,8 @@ def test_calculator_invalid_expression():
 - ✅ Clear history removes all messages
 - ✅ Conversation ID uniqueness
 - ✅ Session persistence
+
+**Note**: With LangGraph checkpointer, these tests also verify checkpoint persistence.
 
 **Example**:
 ```python
@@ -2354,7 +2742,7 @@ def test_conversation_memory_clear():
     assert len(history) == 0
 ```
 
-#### 7. Citation System Tests
+#### 8. Citation System Tests
 
 **Test cases**:
 - ✅ Web citations formatted correctly

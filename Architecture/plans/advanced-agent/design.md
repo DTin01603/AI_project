@@ -19,11 +19,18 @@ Phase 3 xây dựng trên nền tảng Phase 1 (Multi-Model AI Chat) và Phase 2
 
 ### Kiến trúc tổng quan
 
-Phase 3 mở rộng Phase 2 pipeline bằng cách thêm self-reflection loop, multi-step planner, và streaming engine:
+Phase 3 mở rộng Phase 2 pipeline bằng cách sử dụng LangGraph để orchestrate complex workflows với self-reflection loops, multi-step reasoning, và parallel execution:
 
 ```
-User Question → Multi-Step Planner → Execution Plan → Tool Execution (with Self-Reflection) → Streaming Response → Long-Term Memory
+User Question → LangGraph State Machine → [Planner → Executor → Reflection → (Retry Loop)] → Synthesis → Streaming Response → Long-Term Memory
 ```
+
+**LangGraph Integration**:
+- Main graph orchestrates entire workflow với conditional routing
+- Self-reflection loop implemented as graph cycle với max 3 iterations
+- Multi-step execution as subgraph với dynamic nodes
+- Parallel tool execution via LangGraph parallel branches
+- State management tracks reflection scores, retry counts, execution results
 
 ## Kiến trúc
 
@@ -38,25 +45,35 @@ graph TB
     User -->|SSE/WebSocket| Frontend
     Frontend -->|HTTP/JSON| API
     
-    subgraph Phase3["Advanced Agent Phase 3"]
-        MSP[Multi-Step Planner]
-        SR[Self-Reflection Module]
-        Exec[Execution Engine]
+    subgraph Phase3["Advanced Agent Phase 3 - LangGraph"]
+        LG[LangGraph StateGraph]
+        PlannerNode[Planner Node]
+        ExecutorNode[Executor Node]
+        ReflectionNode[Reflection Node]
+        RetryDecisionNode[Retry Decision Node]
+        SynthesisNode[Synthesis Node]
+        CitationNode[Citation Node]
+        
+        LG --> PlannerNode
+        PlannerNode -->|Conditional Edge| ExecutorNode
+        ExecutorNode --> ReflectionNode
+        ReflectionNode -->|Conditional Edge| RetryDecisionNode
+        RetryDecisionNode -.->|Retry Loop| ExecutorNode
+        RetryDecisionNode -->|Next Step| ExecutorNode
+        RetryDecisionNode -->|Done| SynthesisNode
+        SynthesisNode --> CitationNode
+        
         Stream[Streaming Engine]
         LTM[Long-Term Memory]
         SM[Session Memory]
         TR[Tool Registry]
         
-        MSP -->|Execution Plan| Exec
-        Exec -->|Tool Results| SR
-        SR -->|Quality Score| Exec
-        SR -.->|Retry Strategy| Exec
-        Exec -->|Chunks| Stream
+        ExecutorNode -->|Chunks| Stream
         Stream -->|SSE| Frontend
-        LTM -.->|Context| MSP
-        Exec -->|Store Patterns| LTM
-        SM -.->|Session State| Exec
-        TR -->|Available Tools| Exec
+        LTM -.->|Context| PlannerNode
+        ExecutorNode -->|Store Patterns| LTM
+        SM -.->|Session State| LG
+        TR -->|Available Tools| ExecutorNode
     end
     
     subgraph Phase2["Research Agent (Inherited)"]
@@ -79,13 +96,13 @@ graph TB
         Gemini[Google Gemini]
     end
     
-    API --> MSP
-    Exec --> Router
+    API --> LG
+    ExecutorNode --> Router
     Router --> WebSearch
     Router --> RAG
     Router --> Calc
     Router --> DirectLLM
-    Exec --> CodeSandbox
+    ExecutorNode --> CodeSandbox
     TR --> CustomTools
     
     SM --> Redis
@@ -95,70 +112,100 @@ graph TB
 ```
 
 
-### Data Flow - Complex Query with Self-Reflection
+### Data Flow - Complex Query with Self-Reflection (LangGraph)
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant MSP as Multi-Step Planner
-    participant Exec as Execution Engine
-    participant SR as Self-Reflection
+    participant LG as LangGraph State
+    participant Planner as Planner Node
+    participant Executor as Executor Node
+    participant Reflection as Reflection Node
+    participant Retry as Retry Decision Node
     participant Tools as Tools (Phase 2 + Code)
     participant Stream as Streaming Engine
     participant LTM as Long-Term Memory
     
-    U->>MSP: "Analyze Bitcoin price trends and predict next week"
-    MSP->>LTM: Retrieve relevant context
-    LTM-->>MSP: Previous patterns
-    MSP->>MSP: Analyze complexity (0.85)
-    MSP->>MSP: Decompose into sub-questions
-    MSP-->>U: Display Execution Plan (via Stream)
-    U->>MSP: Approve plan
+    U->>LG: "Analyze Bitcoin price trends and predict next week"
+    LG->>Planner: Route to planner node
+    Planner->>LTM: Retrieve relevant context
+    LTM-->>Planner: Previous patterns
+    Planner->>Planner: Analyze complexity (0.85)
+    Planner->>Planner: Decompose into sub-questions
+    Planner->>LG: Update state with execution plan
+    LG->>Stream: Display Execution Plan
+    Stream-->>U: Real-time plan update
     
-    MSP->>Exec: Execute Step 1: Get current price
-    Exec->>Tools: Web Search
-    Tools-->>Exec: Price data
-    Exec->>SR: Evaluate result
-    SR->>SR: Calculate Reflection Score (85)
-    SR-->>Exec: Score OK, proceed
-    Exec->>Stream: Send chunk (Step 1 complete)
+    LG->>Executor: Route to executor (Step 1)
+    Executor->>Tools: Web Search (current price)
+    Tools-->>Executor: Price data
+    Executor->>LG: Update state with step result
+    LG->>Reflection: Route to reflection node
+    Reflection->>Reflection: Calculate score (85)
+    Reflection->>LG: Update state (score=85, retry_count=0)
+    LG->>Retry: Route to retry decision
+    Retry->>Retry: Check: score >= 70? Yes
+    Retry->>LG: Decision: next_step
+    LG->>Stream: Send chunk (Step 1 complete)
     Stream-->>U: Real-time update
     
-    MSP->>Exec: Execute Step 2: Analyze trends
-    Exec->>Tools: Code Execution (pandas analysis)
-    Tools-->>Exec: Analysis results
-    Exec->>SR: Evaluate result
-    SR->>SR: Calculate Reflection Score (65)
-    SR-->>Exec: Score low, retry needed
-    SR->>SR: Generate Retry Strategy
-    Exec->>Tools: Retry with improved approach
-    Tools-->>Exec: Better results
-    Exec->>SR: Re-evaluate
-    SR->>SR: Calculate Reflection Score (88)
-    SR-->>Exec: Score OK, proceed
-    Exec->>Stream: Send chunk (Step 2 complete)
+    LG->>Executor: Route to executor (Step 2)
+    Executor->>Tools: Code Execution (pandas analysis)
+    Tools-->>Executor: Analysis results
+    Executor->>LG: Update state with step result
+    LG->>Reflection: Route to reflection node
+    Reflection->>Reflection: Calculate score (65)
+    Reflection->>LG: Update state (score=65, retry_count=0)
+    LG->>Retry: Route to retry decision
+    Retry->>Retry: Check: score < 70 AND retry < 3? Yes
+    Retry->>LG: Decision: retry (increment retry_count)
+    LG->>Executor: Loop back to executor (retry)
+    Executor->>Tools: Retry with improved approach
+    Tools-->>Executor: Better results
+    Executor->>LG: Update state with step result
+    LG->>Reflection: Route to reflection node
+    Reflection->>Reflection: Calculate score (88)
+    Reflection->>LG: Update state (score=88, retry_count=1)
+    LG->>Retry: Route to retry decision
+    Retry->>Retry: Check: score >= 70? Yes
+    Retry->>LG: Decision: next_step
+    LG->>Stream: Send chunk (Step 2 complete)
     
-    MSP->>Exec: Execute Step 3: Synthesize prediction
-    Exec->>Tools: Direct LLM
-    Tools-->>Exec: Final answer
-    Exec->>SR: Evaluate result
-    SR-->>Exec: Score OK (92)
-    Exec->>Stream: Send final chunk
+    LG->>Executor: Route to executor (Step 3)
+    Executor->>Tools: Direct LLM (synthesis)
+    Tools-->>Executor: Final answer
+    Executor->>LG: Update state with step result
+    LG->>Reflection: Route to reflection node
+    Reflection->>Reflection: Calculate score (92)
+    Reflection->>LG: Update state (score=92)
+    LG->>Retry: Route to retry decision
+    Retry->>Retry: Check: all steps done? Yes
+    Retry->>LG: Decision: done
+    LG->>Stream: Send final chunk
     Stream-->>U: Complete response
     
-    Exec->>LTM: Store successful patterns
-    LTM-->>Exec: Stored
+    LG->>LTM: Store successful patterns
+    LTM-->>LG: Stored
 ```
 
 ### Component Interaction
 
 ```mermaid
 graph LR
-    subgraph Core Components
-        MSP[Multi-Step Planner]
-        SR[Self-Reflection Module]
-        EE[Execution Engine]
-        SE[Streaming Engine]
+    subgraph LangGraph Core
+        State[Advanced Agent State]
+        Graph[StateGraph]
+        Nodes[Graph Nodes]
+        Edges[Conditional Edges]
+    end
+    
+    subgraph Graph Nodes
+        PNode[Planner Node]
+        ENode[Executor Node]
+        RNode[Reflection Node]
+        DNode[Retry Decision Node]
+        SNode[Synthesis Node]
+        CNode[Citation Node]
     end
     
     subgraph Memory Systems
@@ -180,11 +227,18 @@ graph LR
         Docker[Docker/E2B]
     end
     
-    MSP --> EE
-    EE --> SR
-    SR -.->|Retry| EE
-    EE --> SE
-    EE --> TR
+    Graph --> Nodes
+    Nodes --> PNode
+    Nodes --> ENode
+    Nodes --> RNode
+    Nodes --> DNode
+    Nodes --> SNode
+    Nodes --> CNode
+    
+    State -.->|Read/Write| Nodes
+    Edges -.->|Route| Nodes
+    
+    ENode --> TR
     TR --> P2T
     TR --> CS
     TR --> CT
@@ -194,13 +248,134 @@ graph LR
     CM --> Redis
     CS --> Docker
     
-    LTM -.->|Context| MSP
-    SM -.->|State| EE
-    EE -->|Store| LTM
+    LTM -.->|Context| PNode
+    SM -.->|State| Graph
+    ENode -->|Store| LTM
 ```
 
 
 ## Components và Interfaces
+
+### 0. LangGraph State Schema
+
+**Trách nhiệm**: Định nghĩa state structure cho LangGraph workflow, tracking toàn bộ execution context.
+
+**State Definition**:
+```python
+from typing import TypedDict, Annotated, Sequence, Optional, Dict, Any, List
+from langchain_core.messages import BaseMessage, add_messages
+from dataclasses import dataclass
+from datetime import datetime
+
+@dataclass
+class ExecutionPlan:
+    plan_id: str
+    original_question: str
+    complexity_score: float
+    sub_questions: List['SubQuestion']
+    requires_approval: bool
+    estimated_time_seconds: float
+    reasoning: str
+
+@dataclass
+class SubQuestion:
+    step_id: str
+    question: str
+    suggested_tool: str
+    dependencies: List[str]
+    can_run_parallel: bool
+
+@dataclass
+class ErrorPattern:
+    pattern_type: str
+    description: str
+    severity: float
+    location: Optional[str]
+
+@dataclass
+class RetryStrategy:
+    strategy_type: str
+    instructions: str
+    suggested_tool: Optional[str]
+    additional_context: Optional[Dict[str, Any]]
+
+@dataclass
+class Citation:
+    source_type: str
+    title: str
+    url: Optional[str]
+    content: Optional[str]
+
+class AdvancedAgentState(TypedDict):
+    """State for Advanced Agent LangGraph workflow."""
+    
+    # Messages (using LangChain's add_messages reducer)
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    
+    # Planning
+    complexity_score: float
+    execution_plan: Optional[ExecutionPlan]
+    current_step: int
+    total_steps: int
+    
+    # Execution
+    step_results: Dict[str, Any]  # step_id -> result
+    parallel_results: Dict[str, Any]  # For parallel execution
+    current_tool: Optional[str]
+    
+    # Self-Reflection
+    reflection_score: float
+    error_patterns: List[ErrorPattern]
+    retry_strategy: Optional[RetryStrategy]
+    retry_count: int
+    max_retries: int
+    
+    # Final output
+    final_answer: str
+    citations: List[Citation]
+    
+    # Metadata
+    conversation_id: str
+    user_id: Optional[str]
+    session_id: Optional[str]
+    execution_time_ms: float
+    start_time: datetime
+    
+    # Control flow
+    next_action: str  # "plan", "execute", "reflect", "retry", "next_step", "synthesize", "done"
+```
+
+**State Reducers**:
+```python
+from operator import add
+
+def add_step_result(existing: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    """Reducer for step_results - merges new results."""
+    return {**existing, **new}
+
+def increment_retry_count(existing: int, increment: int) -> int:
+    """Reducer for retry_count - increments safely."""
+    return existing + increment
+
+def append_error_patterns(existing: List[ErrorPattern], new: List[ErrorPattern]) -> List[ErrorPattern]:
+    """Reducer for error_patterns - appends new patterns."""
+    return existing + new
+
+def append_citations(existing: List[Citation], new: List[Citation]) -> List[Citation]:
+    """Reducer for citations - appends and deduplicates."""
+    seen = {(c.source_type, c.url) for c in existing}
+    unique_new = [c for c in new if (c.source_type, c.url) not in seen]
+    return existing + unique_new
+
+# Apply reducers to state
+class AdvancedAgentState(TypedDict):
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    step_results: Annotated[Dict[str, Any], add_step_result]
+    retry_count: Annotated[int, increment_retry_count]
+    error_patterns: Annotated[List[ErrorPattern], append_error_patterns]
+    citations: Annotated[List[Citation], append_citations]
+    # ... other fields without reducers use default overwrite behavior
+```
 
 ### 1. Self-Reflection Module
 
@@ -1967,13 +2142,19 @@ class ToolRegistry:
 ```
 
 
-### 7. Advanced Execution Engine
+### 7. LangGraph Advanced Agent Implementation
 
-**Trách nhiệm**: Orchestrate execution với self-reflection loop và multi-step planning.
+**Trách nhiệm**: Orchestrate toàn bộ advanced agent workflow sử dụng LangGraph StateGraph với conditional routing, retry loops, và parallel execution.
 
-**Implementation**:
+**Graph Structure**:
 ```python
-class AdvancedExecutionEngine:
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolExecutor
+from typing import Literal
+
+class AdvancedAgentGraph:
+    """LangGraph implementation of Advanced Agent with self-reflection and multi-step reasoning."""
+    
     def __init__(
         self,
         multi_step_planner: MultiStepPlanner,
@@ -1989,6 +2170,577 @@ class AdvancedExecutionEngine:
         self.streaming = streaming_engine
         self.memory = long_term_memory
         self.research = research_orchestrator
+        
+        # Build the graph
+        self.graph = self._build_graph()
+        self.compiled_graph = self.graph.compile()
+    
+    def _build_graph(self) -> StateGraph:
+        """Build the LangGraph StateGraph for advanced agent workflow."""
+        workflow = StateGraph(AdvancedAgentState)
+        
+        # Add nodes
+        workflow.add_node("planner", self.planner_node)
+        workflow.add_node("executor", self.executor_node)
+        workflow.add_node("reflection", self.reflection_node)
+        workflow.add_node("synthesis", self.synthesis_node)
+        workflow.add_node("citation", self.citation_node)
+        
+        # Set entry point
+        workflow.set_entry_point("planner")
+        
+        # Conditional routing after planner
+        workflow.add_conditional_edges(
+            "planner",
+            self.route_after_planning,
+            {
+                "execute": "executor",  # Both simple and complex go to executor
+            }
+        )
+        
+        # Executor always goes to reflection
+        workflow.add_edge("executor", "reflection")
+        
+        # Conditional routing after reflection (this creates the retry loop)
+        workflow.add_conditional_edges(
+            "reflection",
+            self.should_retry,
+            {
+                "retry": "executor",      # Loop back for retry
+                "next_step": "executor",  # Continue to next step
+                "done": "synthesis"       # All steps complete
+            }
+        )
+        
+        # Synthesis → Citation → END
+        workflow.add_edge("synthesis", "citation")
+        workflow.add_edge("citation", END)
+        
+        return workflow
+    
+    async def planner_node(self, state: AdvancedAgentState) -> AdvancedAgentState:
+        """
+        Planner node: Analyzes complexity and creates execution plan.
+        
+        Updates state with:
+        - complexity_score
+        - execution_plan (if complex)
+        - total_steps
+        - current_step (initialized to 0)
+        """
+        logger.info("planner_node: Starting planning")
+        
+        # Get the user question from messages
+        user_message = [m for m in state["messages"] if m.type == "human"][-1]
+        question = user_message.content
+        
+        # Retrieve context from long-term memory
+        context = await self.memory.retrieve_relevant_context(
+            query=question,
+            user_id=state.get("user_id", ""),
+            top_k=5
+        )
+        
+        # Send context to stream
+        if context and state.get("session_id"):
+            await self.streaming.send_chunk(
+                state["session_id"],
+                ChunkType.PROGRESS,
+                f"Retrieved {len(context)} relevant memories",
+                {"context_count": len(context)}
+            )
+        
+        # Analyze and plan
+        plan = await self.planner.analyze_and_plan(PlannerInput(
+            question=question,
+            conversation_history=[],
+            available_tools=await self._get_available_tools(),
+            user_context={"user_id": state.get("user_id")}
+        ))
+        
+        if plan:
+            # Complex query - multi-step execution
+            logger.info(f"planner_node: Created plan with {len(plan.sub_questions)} steps")
+            
+            # Send plan to stream
+            if state.get("session_id"):
+                await self.streaming.send_chunk(
+                    state["session_id"],
+                    ChunkType.PLAN,
+                    json.dumps(asdict(plan)),
+                    {"requires_approval": plan.requires_approval}
+                )
+            
+            return {
+                **state,
+                "complexity_score": plan.complexity_score,
+                "execution_plan": plan,
+                "total_steps": len(plan.sub_questions),
+                "current_step": 0,
+                "next_action": "execute"
+            }
+        else:
+            # Simple query - single-step execution
+            logger.info("planner_node: Simple query, no planning needed")
+            
+            # Create a simple single-step plan
+            simple_plan = ExecutionPlan(
+                plan_id=str(uuid.uuid4()),
+                original_question=question,
+                complexity_score=0.5,
+                sub_questions=[SubQuestion(
+                    step_id="single_step",
+                    question=question,
+                    suggested_tool="auto",
+                    dependencies=[],
+                    can_run_parallel=False
+                )],
+                requires_approval=False,
+                estimated_time_seconds=2.0,
+                reasoning="Simple query, direct execution"
+            )
+            
+            return {
+                **state,
+                "complexity_score": 0.5,
+                "execution_plan": simple_plan,
+                "total_steps": 1,
+                "current_step": 0,
+                "next_action": "execute"
+            }
+    
+    async def executor_node(self, state: AdvancedAgentState) -> AdvancedAgentState:
+        """
+        Executor node: Executes current step using appropriate tools.
+        
+        Can execute:
+        - Single step (simple query)
+        - Current step in multi-step plan
+        - Retry of failed step
+        
+        Updates state with:
+        - step_results[step_id]
+        - current_tool
+        """
+        logger.info(f"executor_node: Executing step {state['current_step'] + 1}/{state['total_steps']}")
+        
+        plan = state["execution_plan"]
+        current_step_idx = state["current_step"]
+        sub_question = plan.sub_questions[current_step_idx]
+        
+        # Send progress
+        if state.get("session_id"):
+            await self.streaming.send_chunk(
+                state["session_id"],
+                ChunkType.PROGRESS,
+                f"Executing step: {sub_question.question}",
+                {"step_id": sub_question.step_id, "step_num": current_step_idx + 1}
+            )
+        
+        # Check if this is a retry
+        is_retry = state.get("retry_count", 0) > 0
+        if is_retry and state.get("retry_strategy"):
+            logger.info(f"executor_node: Retry attempt {state['retry_count']} with strategy {state['retry_strategy'].strategy_type}")
+            # Apply retry strategy
+            if state["retry_strategy"].suggested_tool:
+                sub_question.suggested_tool = state["retry_strategy"].suggested_tool
+        
+        # Execute using Research Orchestrator (Phase 2)
+        result = await self.research.execute(
+            question=sub_question.question,
+            conversation_id=state["conversation_id"],
+            user_id=state.get("user_id", "")
+        )
+        
+        # Store result
+        step_result = {
+            "answer": result.answer,
+            "citations": result.citations,
+            "tool_used": result.tools_used[0].tool_name if result.tools_used else "unknown",
+            "execution_time_ms": result.meta.execution_time_ms
+        }
+        
+        return {
+            **state,
+            "step_results": {sub_question.step_id: step_result},
+            "current_tool": step_result["tool_used"],
+            "citations": result.citations,
+            "next_action": "reflect"
+        }
+    
+    async def reflection_node(self, state: AdvancedAgentState) -> AdvancedAgentState:
+        """
+        Reflection node: Evaluates quality of current step result.
+        
+        Updates state with:
+        - reflection_score
+        - error_patterns (if score low)
+        - retry_strategy (if retry available)
+        """
+        logger.info("reflection_node: Evaluating result quality")
+        
+        plan = state["execution_plan"]
+        current_step_idx = state["current_step"]
+        sub_question = plan.sub_questions[current_step_idx]
+        step_result = state["step_results"][sub_question.step_id]
+        
+        # Perform reflection
+        reflection_result = await self.reflection.evaluate(ReflectionInput(
+            question=sub_question.question,
+            answer=step_result["answer"],
+            tool_used=step_result["tool_used"],
+            retrieved_sources=step_result.get("citations"),
+            execution_context={}
+        ))
+        
+        # Send reflection to stream
+        if state.get("session_id"):
+            await self.streaming.send_chunk(
+                state["session_id"],
+                ChunkType.REFLECTION,
+                json.dumps({
+                    "score": reflection_result.reflection_score,
+                    "passed": reflection_result.passed,
+                    "attempt": state.get("retry_count", 0) + 1,
+                    "step_id": sub_question.step_id
+                }),
+                {"step_id": sub_question.step_id}
+            )
+        
+        logger.info(f"reflection_node: Score={reflection_result.reflection_score}, Passed={reflection_result.passed}")
+        
+        return {
+            **state,
+            "reflection_score": reflection_result.reflection_score,
+            "error_patterns": reflection_result.error_patterns,
+            "retry_strategy": reflection_result.retry_strategy,
+            "next_action": "decide_retry"
+        }
+    
+    async def synthesis_node(self, state: AdvancedAgentState) -> AdvancedAgentState:
+        """
+        Synthesis node: Combines all step results into final answer.
+        
+        Updates state with:
+        - final_answer
+        """
+        logger.info("synthesis_node: Synthesizing final answer")
+        
+        plan = state["execution_plan"]
+        
+        if len(plan.sub_questions) == 1:
+            # Single step - use result directly
+            single_result = list(state["step_results"].values())[0]
+            final_answer = single_result["answer"]
+        else:
+            # Multi-step - synthesize
+            combined = "\n\n".join([
+                f"Step {i+1} ({sq.step_id}): {state['step_results'][sq.step_id]['answer']}"
+                for i, sq in enumerate(plan.sub_questions)
+                if sq.step_id in state["step_results"]
+            ])
+            
+            # Use LLM to synthesize (simplified - in practice use proper LLM)
+            synthesis_prompt = f"""Original Question: {plan.original_question}
+
+Step Results:
+{combined}
+
+Synthesize a coherent final answer that addresses the original question:"""
+            
+            # For now, just combine (in production, use LLM)
+            final_answer = combined
+        
+        # Calculate total execution time
+        execution_time_ms = (datetime.utcnow() - state["start_time"]).total_seconds() * 1000
+        
+        # Store execution pattern in memory
+        await self.memory.store_execution_pattern(
+            question=plan.original_question,
+            execution_plan=plan,
+            execution_time_ms=execution_time_ms,
+            success=True
+        )
+        
+        return {
+            **state,
+            "final_answer": final_answer,
+            "execution_time_ms": execution_time_ms,
+            "next_action": "cite"
+        }
+    
+    async def citation_node(self, state: AdvancedAgentState) -> AdvancedAgentState:
+        """
+        Citation node: Adds citations to final answer.
+        
+        Updates state with:
+        - citations (deduplicated and formatted)
+        """
+        logger.info("citation_node: Adding citations")
+        
+        # Citations already collected in state from executor nodes
+        # Just ensure they're deduplicated
+        unique_citations = []
+        seen = set()
+        
+        for citation in state.get("citations", []):
+            key = (citation.source_type, citation.url)
+            if key not in seen:
+                seen.add(key)
+                unique_citations.append(citation)
+        
+        # Send final chunk
+        if state.get("session_id"):
+            await self.streaming.send_chunk(
+                state["session_id"],
+                ChunkType.DONE,
+                "",
+                {"execution_time_ms": state["execution_time_ms"]}
+            )
+        
+        return {
+            **state,
+            "citations": unique_citations,
+            "next_action": "done"
+        }
+    
+    def route_after_planning(self, state: AdvancedAgentState) -> Literal["execute"]:
+        """
+        Route after planning node.
+        
+        Both simple and complex queries go to executor.
+        """
+        return "execute"
+    
+    def should_retry(self, state: AdvancedAgentState) -> Literal["retry", "next_step", "done"]:
+        """
+        Decide whether to retry, continue to next step, or finish.
+        
+        Logic:
+        1. If reflection score < 70 AND retry_count < max_retries → retry
+        2. Else if more steps remaining → next_step
+        3. Else → done
+        """
+        reflection_score = state.get("reflection_score", 100)
+        retry_count = state.get("retry_count", 0)
+        max_retries = state.get("max_retries", 3)
+        current_step = state.get("current_step", 0)
+        total_steps = state.get("total_steps", 1)
+        
+        # Check if retry needed
+        if reflection_score < 70 and retry_count < max_retries:
+            logger.info(f"should_retry: Retry needed (score={reflection_score}, retry={retry_count})")
+            return "retry"
+        
+        # Check if more steps
+        if current_step + 1 < total_steps:
+            logger.info(f"should_retry: Moving to next step ({current_step + 1}/{total_steps})")
+            # Reset retry count for next step
+            state["retry_count"] = 0
+            state["current_step"] = current_step + 1
+            return "next_step"
+        
+        # All done
+        logger.info("should_retry: All steps complete")
+        return "done"
+    
+    async def execute_query(
+        self,
+        question: str,
+        user_id: str,
+        conversation_id: str,
+        session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute query using LangGraph workflow.
+        
+        Returns:
+            Dict with success, answer, citations, and metadata
+        """
+        # Initialize state
+        initial_state = AdvancedAgentState(
+            messages=[HumanMessage(content=question)],
+            complexity_score=0.0,
+            execution_plan=None,
+            current_step=0,
+            total_steps=1,
+            step_results={},
+            parallel_results={},
+            current_tool=None,
+            reflection_score=100.0,
+            error_patterns=[],
+            retry_strategy=None,
+            retry_count=0,
+            max_retries=3,
+            final_answer="",
+            citations=[],
+            conversation_id=conversation_id,
+            user_id=user_id,
+            session_id=session_id,
+            execution_time_ms=0.0,
+            start_time=datetime.utcnow(),
+            next_action="plan"
+        )
+        
+        # Run the graph
+        try:
+            final_state = await self.compiled_graph.ainvoke(initial_state)
+            
+            return {
+                "success": True,
+                "answer": final_state["final_answer"],
+                "citations": final_state["citations"],
+                "plan": asdict(final_state["execution_plan"]) if final_state["execution_plan"] else None,
+                "reflection_score": final_state["reflection_score"],
+                "execution_time_ms": final_state["execution_time_ms"]
+            }
+        
+        except Exception as e:
+            logger.error(f"Graph execution failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "answer": "",
+                "citations": []
+            }
+    
+    async def _get_available_tools(self) -> List[str]:
+        """Get list of available tools."""
+        tools = await self.tool_registry.list_tools()
+        return [t.name for t in tools] + ["web_search", "rag", "calculator", "code_execution", "direct_llm"]
+
+
+### Parallel Execution Subgraph
+
+**For independent steps in execution plan**:
+```python
+class ParallelExecutionSubgraph:
+    """Subgraph for executing independent steps in parallel."""
+    
+    def __init__(self, research_orchestrator: ResearchOrchestrator):
+        self.research = research_orchestrator
+    
+    def build_parallel_graph(self, independent_steps: List[SubQuestion]) -> StateGraph:
+        """Build a subgraph that executes steps in parallel."""
+        parallel_workflow = StateGraph(AdvancedAgentState)
+        
+        # Add a node for each independent step
+        for step in independent_steps:
+            parallel_workflow.add_node(
+                step.step_id,
+                lambda state, sq=step: self._execute_parallel_step(state, sq)
+            )
+        
+        # All nodes can run in parallel (no edges between them)
+        # They all connect to a merge node
+        parallel_workflow.add_node("merge_results", self._merge_parallel_results)
+        
+        # Set entry point to all parallel nodes
+        for step in independent_steps:
+            parallel_workflow.set_entry_point(step.step_id)
+            parallel_workflow.add_edge(step.step_id, "merge_results")
+        
+        parallel_workflow.add_edge("merge_results", END)
+        
+        return parallel_workflow
+    
+    async def _execute_parallel_step(
+        self,
+        state: AdvancedAgentState,
+        sub_question: SubQuestion
+    ) -> AdvancedAgentState:
+        """Execute a single step in parallel."""
+        result = await self.research.execute(
+            question=sub_question.question,
+            conversation_id=state["conversation_id"],
+            user_id=state.get("user_id", "")
+        )
+        
+        return {
+            **state,
+            "parallel_results": {
+                sub_question.step_id: {
+                    "answer": result.answer,
+                    "citations": result.citations,
+                    "tool_used": result.tools_used[0].tool_name if result.tools_used else "unknown"
+                }
+            }
+        }
+    
+    async def _merge_parallel_results(self, state: AdvancedAgentState) -> AdvancedAgentState:
+        """Merge results from parallel execution."""
+        # Move parallel_results to step_results
+        return {
+            **state,
+            "step_results": {**state["step_results"], **state["parallel_results"]},
+            "parallel_results": {}
+        }
+```
+
+### LangGraph Streaming Integration
+
+**Stream events from graph execution**:
+```python
+class LangGraphStreamingAdapter:
+    """Adapter to stream LangGraph events to Streaming Engine."""
+    
+    def __init__(self, streaming_engine: StreamingEngine):
+        self.streaming = streaming_engine
+    
+    async def stream_graph_execution(
+        self,
+        graph: CompiledGraph,
+        initial_state: AdvancedAgentState,
+        session_id: str
+    ) -> AdvancedAgentState:
+        """Execute graph and stream events."""
+        
+        async for event in graph.astream(initial_state):
+            # event is a dict with node name as key
+            for node_name, node_output in event.items():
+                # Send progress update
+                await self.streaming.send_chunk(
+                    session_id,
+                    ChunkType.PROGRESS,
+                    f"Completed: {node_name}",
+                    {"node": node_name, "output": str(node_output)[:100]}
+                )
+        
+        # Return final state
+        return node_output
+```
+
+
+### 8. Advanced Execution Engine (Legacy Wrapper)
+
+**Trách nhiệm**: Legacy wrapper around LangGraph implementation for backward compatibility.
+
+**Implementation**:
+```python
+class AdvancedExecutionEngine:
+    """
+    Legacy wrapper around LangGraph implementation.
+    Maintains backward compatibility with existing code.
+    """
+    
+    def __init__(
+        self,
+        multi_step_planner: MultiStepPlanner,
+        self_reflection: SelfReflectionModule,
+        tool_registry: ToolRegistry,
+        streaming_engine: StreamingEngine,
+        long_term_memory: LongTermMemory,
+        research_orchestrator: ResearchOrchestrator  # From Phase 2
+    ):
+        # Create LangGraph implementation
+        self.graph_agent = AdvancedAgentGraph(
+            multi_step_planner=multi_step_planner,
+            self_reflection=self_reflection,
+            tool_registry=tool_registry,
+            streaming_engine=streaming_engine,
+            long_term_memory=long_term_memory,
+            research_orchestrator=research_orchestrator
+        )
     
     async def execute_query(
         self,
@@ -1997,299 +2749,13 @@ class AdvancedExecutionEngine:
         conversation_id: str,
         session_id: str
     ) -> Dict[str, Any]:
-        """Execute query with advanced features."""
-        start_time = time.time()
-        
-        # Retrieve relevant context from long-term memory
-        context = await self.memory.retrieve_relevant_context(
-            query=question,
+        """Execute query using LangGraph workflow."""
+        return await self.graph_agent.execute_query(
+            question=question,
             user_id=user_id,
-            top_k=5
+            conversation_id=conversation_id,
+            session_id=session_id
         )
-        
-        # Send context to stream
-        if context:
-            await self.streaming.send_chunk(
-                session_id,
-                ChunkType.PROGRESS,
-                f"Retrieved {len(context)} relevant memories",
-                {"context_count": len(context)}
-            )
-        
-        # Check if multi-step planning is needed
-        plan = await self.planner.analyze_and_plan(PlannerInput(
-            question=question,
-            conversation_history=[],
-            available_tools=await self._get_available_tools(),
-            user_context={"user_id": user_id}
-        ))
-        
-        if plan:
-            # Send plan to user for approval
-            await self.streaming.send_chunk(
-                session_id,
-                ChunkType.PLAN,
-                json.dumps(asdict(plan)),
-                {"requires_approval": plan.requires_approval}
-            )
-            
-            if plan.requires_approval:
-                # Wait for user approval (simplified)
-                # In practice, would wait for approval via separate endpoint
-                pass
-            
-            # Execute multi-step plan
-            result = await self._execute_plan(plan, session_id, user_id, conversation_id)
-        else:
-            # Execute single-step query
-            result = await self._execute_single_step(
-                question,
-                session_id,
-                user_id,
-                conversation_id
-            )
-        
-        # Store execution pattern
-        execution_time_ms = (time.time() - start_time) * 1000
-        if plan:
-            await self.memory.store_execution_pattern(
-                question=question,
-                execution_plan=plan,
-                execution_time_ms=execution_time_ms,
-                success=result['success']
-            )
-        
-        # Send final chunk
-        await self.streaming.send_chunk(
-            session_id,
-            ChunkType.DONE,
-            "",
-            {"execution_time_ms": execution_time_ms}
-        )
-        
-        return result
-    
-    async def _execute_plan(
-        self,
-        plan: ExecutionPlan,
-        session_id: str,
-        user_id: str,
-        conversation_id: str
-    ) -> Dict[str, Any]:
-        """Execute multi-step plan."""
-        results = {}
-        
-        for sub_question in plan.sub_questions:
-            # Check dependencies
-            if not self._dependencies_met(sub_question, results):
-                logger.warning(f"Dependencies not met for {sub_question.step_id}")
-                continue
-            
-            # Send progress
-            await self.streaming.send_chunk(
-                session_id,
-                ChunkType.PROGRESS,
-                f"Executing step: {sub_question.question}",
-                {"step_id": sub_question.step_id}
-            )
-            
-            try:
-                # Execute step with self-reflection
-                step_result = await self._execute_step_with_reflection(
-                    sub_question,
-                    session_id,
-                    user_id,
-                    conversation_id
-                )
-                
-                results[sub_question.step_id] = step_result
-                
-                # Send step completion
-                await self.streaming.send_chunk(
-                    session_id,
-                    ChunkType.PROGRESS,
-                    f"Step completed: {sub_question.step_id}",
-                    {"step_id": sub_question.step_id, "success": True}
-                )
-            
-            except Exception as e:
-                logger.error(f"Step {sub_question.step_id} failed: {e}")
-                
-                # Attempt to replan
-                new_plan = await self.planner.replan(plan, sub_question, e)
-                if new_plan:
-                    # Continue with new plan
-                    return await self._execute_plan(
-                        new_plan,
-                        session_id,
-                        user_id,
-                        conversation_id
-                    )
-                else:
-                    # Cannot recover
-                    return {
-                        "success": False,
-                        "error": f"Step {sub_question.step_id} failed and cannot replan",
-                        "partial_results": results
-                    }
-        
-        # Synthesize final answer
-        final_answer = await self._synthesize_results(plan.original_question, results)
-        
-        return {
-            "success": True,
-            "answer": final_answer,
-            "plan": asdict(plan),
-            "step_results": results
-        }
-    
-    async def _execute_step_with_reflection(
-        self,
-        sub_question: SubQuestion,
-        session_id: str,
-        user_id: str,
-        conversation_id: str
-    ) -> Dict[str, Any]:
-        """Execute a single step with self-reflection loop."""
-        max_attempts = 3
-        
-        for attempt in range(max_attempts):
-            # Execute using Research Orchestrator (Phase 2)
-            result = await self.research.execute(
-                question=sub_question.question,
-                conversation_id=conversation_id,
-                user_id=user_id
-            )
-            
-            # Self-reflection
-            reflection_result = await self.reflection.evaluate(ReflectionInput(
-                question=sub_question.question,
-                answer=result.answer,
-                tool_used=result.tools_used[0].tool_name if result.tools_used else "unknown",
-                retrieved_sources=result.citations,
-                execution_context={}
-            ))
-            
-            # Send reflection to stream
-            await self.streaming.send_chunk(
-                session_id,
-                ChunkType.REFLECTION,
-                json.dumps({
-                    "score": reflection_result.reflection_score,
-                    "passed": reflection_result.passed,
-                    "attempt": attempt + 1
-                }),
-                {"step_id": sub_question.step_id}
-            )
-            
-            if reflection_result.passed:
-                # Success
-                return {
-                    "answer": result.answer,
-                    "citations": result.citations,
-                    "reflection_score": reflection_result.reflection_score,
-                    "attempts": attempt + 1
-                }
-            
-            # Failed reflection
-            if attempt < max_attempts - 1 and reflection_result.retry_strategy:
-                # Store error pattern
-                if reflection_result.error_patterns:
-                    for error_pattern in reflection_result.error_patterns:
-                        await self.memory.store_error_pattern(
-                            error_pattern,
-                            reflection_result.retry_strategy,
-                            success=False
-                        )
-                
-                # Apply retry strategy
-                logger.info(
-                    f"Retrying with strategy: {reflection_result.retry_strategy.strategy_type}"
-                )
-                
-                # Modify sub_question based on retry strategy
-                if reflection_result.retry_strategy.suggested_tool:
-                    sub_question.suggested_tool = reflection_result.retry_strategy.suggested_tool
-            else:
-                # Max attempts reached
-                logger.warning(f"Max reflection attempts reached for {sub_question.step_id}")
-                return {
-                    "answer": result.answer,
-                    "citations": result.citations,
-                    "reflection_score": reflection_result.reflection_score,
-                    "attempts": attempt + 1,
-                    "warning": "Quality below threshold after max retries"
-                }
-        
-        # Should not reach here
-        raise Exception("Unexpected execution path")
-    
-    async def _execute_single_step(
-        self,
-        question: str,
-        session_id: str,
-        user_id: str,
-        conversation_id: str
-    ) -> Dict[str, Any]:
-        """Execute single-step query with reflection."""
-        sub_question = SubQuestion(
-            step_id="single_step",
-            question=question,
-            suggested_tool="auto",
-            dependencies=[],
-            can_run_parallel=False
-        )
-        
-        result = await self._execute_step_with_reflection(
-            sub_question,
-            session_id,
-            user_id,
-            conversation_id
-        )
-        
-        return {
-            "success": True,
-            "answer": result["answer"],
-            "citations": result["citations"],
-            "reflection_score": result["reflection_score"]
-        }
-    
-    def _dependencies_met(
-        self,
-        sub_question: SubQuestion,
-        results: Dict[str, Any]
-    ) -> bool:
-        """Check if all dependencies are met."""
-        return all(dep in results for dep in sub_question.dependencies)
-    
-    async def _synthesize_results(
-        self,
-        original_question: str,
-        results: Dict[str, Any]
-    ) -> str:
-        """Synthesize final answer from step results."""
-        # Combine all step answers
-        combined = "\n\n".join([
-            f"Step {step_id}: {result['answer']}"
-            for step_id, result in results.items()
-        ])
-        
-        # Use LLM to synthesize
-        synthesis_prompt = f"""Original Question: {original_question}
-
-Step Results:
-{combined}
-
-Synthesize a coherent final answer:"""
-        
-        # Use direct LLM (simplified)
-        # In practice, would use proper LLM service
-        return combined
-    
-    async def _get_available_tools(self) -> List[str]:
-        """Get list of available tools."""
-        tools = await self.tool_registry.list_tools()
-        return [t.name for t in tools] + ["web_search", "rag", "calculator", "code_execution", "direct_llm"]
 ```
 
 
@@ -2926,6 +3392,72 @@ networks:
   agent-network:
     driver: bridge
 ```
+
+### Python Dependencies
+
+**requirements.txt**:
+```txt
+# Phase 1 & 2 dependencies (inherited)
+fastapi==0.116.1
+uvicorn[standard]==0.34.0
+pydantic==2.12.5
+pydantic-settings==2.7.1
+langchain==0.3.26
+langchain-google-genai==4.0.0
+langchain-core==0.3.26
+structlog==24.4.0
+python-dotenv==1.0.1
+tavily-python==0.3.3
+chromadb==0.4.22
+langchain-community==0.3.26
+pypdf2==3.0.1
+python-docx==1.1.0
+unstructured==0.12.4
+
+# LangGraph for Phase 3 (NEW)
+langgraph==0.2.45
+langgraph-checkpoint==1.0.12
+
+# Phase 3 new dependencies
+redis==5.0.1
+aioredis==2.0.1
+docker==7.0.0
+sse-starlette==2.0.0
+prometheus-client==0.19.0
+pinecone-client==3.0.0
+cryptography==42.0.0
+slowapi==0.1.9
+pyjwt==2.8.0
+semver==3.0.2
+
+# Optional: E2B for code execution (alternative to Docker)
+# e2b==0.15.0
+```
+
+**requirements-dev.txt**:
+```txt
+pytest==9.0.2
+pytest-asyncio==0.23.3
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+hypothesis==6.103.1
+black==24.10.0
+ruff==0.8.4
+mypy==1.13.0
+```
+
+**Key Dependencies Explained**:
+- **langgraph**: Core LangGraph library for building stateful, multi-actor applications
+- **langgraph-checkpoint**: Checkpointing support for LangGraph state persistence
+- **redis/aioredis**: Session memory and caching
+- **docker**: Code execution sandbox management
+- **sse-starlette**: Server-Sent Events for streaming
+- **prometheus-client**: Metrics collection
+- **pinecone-client**: Vector database for long-term memory
+- **cryptography**: Encryption for sensitive data
+- **slowapi**: Rate limiting
+- **pyjwt**: JWT authentication
+- **semver**: Semantic versioning for tool registry
 
 ## Error Handling
 
@@ -3980,21 +4512,29 @@ def test_conversation_persistence_round_trip(messages):
 
 **Component-Level Tests**:
 
-1. **Self-Reflection Module**:
+1. **LangGraph Workflow Tests**:
+   - Test graph construction and node connections
+   - Test conditional edge routing logic
+   - Test state updates in each node
+   - Test retry loop with max iterations
+   - Test parallel execution subgraph
+   - Mock LLM and tool responses for deterministic testing
+
+2. **Self-Reflection Module**:
    - Test score calculation with known good/bad answers
    - Test error pattern detection with intentional errors
    - Test retry strategy generation for different error types
    - Test max retry limit enforcement
    - Mock LLM responses for deterministic testing
 
-2. **Multi-Step Planner**:
+3. **Multi-Step Planner**:
    - Test complexity calculation with simple/complex queries
    - Test plan generation with known complex queries
    - Test dependency resolution
    - Test parallel step identification
    - Test replanning after failures
 
-3. **Code Execution Sandbox**:
+4. **Code Execution Sandbox**:
    - Test successful code execution
    - Test timeout enforcement
    - Test memory limit enforcement
@@ -4002,14 +4542,14 @@ def test_conversation_persistence_round_trip(messages):
    - Test image capture from matplotlib
    - Test exception handling
 
-4. **Streaming Engine**:
+5. **Streaming Engine**:
    - Test chunk delivery order
    - Test chunk latency measurement
    - Test reconnection and resume
    - Test buffer overflow handling
    - Test error chunk delivery
 
-5. **Long-Term Memory**:
+6. **Long-Term Memory**:
    - Test conversation summarization
    - Test preference extraction
    - Test relevance scoring
@@ -4017,37 +4557,239 @@ def test_conversation_persistence_round_trip(messages):
    - Test encryption/decryption
    - Test access control
 
-6. **Tool Registry**:
+7. **Tool Registry**:
    - Test tool registration validation
    - Test tool versioning
    - Test tool composition validation
    - Test tool execution timeout
    - Test tool disabling after failures
 
+**LangGraph-Specific Tests**:
+
+```python
+import pytest
+from langgraph.graph import StateGraph
+
+class TestAdvancedAgentGraph:
+    """Test LangGraph workflow."""
+    
+    @pytest.mark.asyncio
+    async def test_graph_construction(self):
+        """Test that graph is constructed correctly."""
+        graph_agent = AdvancedAgentGraph(
+            multi_step_planner=mock_planner,
+            self_reflection=mock_reflection,
+            tool_registry=mock_registry,
+            streaming_engine=mock_streaming,
+            long_term_memory=mock_memory,
+            research_orchestrator=mock_research
+        )
+        
+        # Check nodes exist
+        assert "planner" in graph_agent.graph.nodes
+        assert "executor" in graph_agent.graph.nodes
+        assert "reflection" in graph_agent.graph.nodes
+        assert "synthesis" in graph_agent.graph.nodes
+        assert "citation" in graph_agent.graph.nodes
+    
+    @pytest.mark.asyncio
+    async def test_retry_loop_max_iterations(self):
+        """Test that retry loop respects max iterations."""
+        # Mock reflection to always fail
+        mock_reflection.evaluate = AsyncMock(return_value=ReflectionResult(
+            reflection_score=50,
+            passed=False,
+            error_patterns=[],
+            retry_strategy=RetryStrategy(
+                strategy_type="refine_query",
+                instructions="Try again",
+                suggested_tool=None,
+                additional_context=None
+            ),
+            reasoning="Low quality",
+            evaluation_time_ms=100
+        ))
+        
+        graph_agent = AdvancedAgentGraph(...)
+        
+        result = await graph_agent.execute_query(
+            question="test question",
+            user_id="test_user",
+            conversation_id="test_conv",
+            session_id="test_session"
+        )
+        
+        # Should stop after 3 retries
+        assert mock_reflection.evaluate.call_count <= 3
+    
+    @pytest.mark.asyncio
+    async def test_conditional_routing_after_reflection(self):
+        """Test conditional routing based on reflection score."""
+        graph_agent = AdvancedAgentGraph(...)
+        
+        # Test retry path
+        state_low_score = AdvancedAgentState(
+            reflection_score=60,
+            retry_count=0,
+            max_retries=3,
+            current_step=0,
+            total_steps=1,
+            ...
+        )
+        assert graph_agent.should_retry(state_low_score) == "retry"
+        
+        # Test next_step path
+        state_good_score_more_steps = AdvancedAgentState(
+            reflection_score=80,
+            retry_count=0,
+            max_retries=3,
+            current_step=0,
+            total_steps=3,
+            ...
+        )
+        assert graph_agent.should_retry(state_good_score_more_steps) == "next_step"
+        
+        # Test done path
+        state_good_score_last_step = AdvancedAgentState(
+            reflection_score=80,
+            retry_count=0,
+            max_retries=3,
+            current_step=2,
+            total_steps=3,
+            ...
+        )
+        assert graph_agent.should_retry(state_good_score_last_step) == "done"
+    
+    @pytest.mark.asyncio
+    async def test_state_updates_through_workflow(self):
+        """Test that state is updated correctly through workflow."""
+        graph_agent = AdvancedAgentGraph(...)
+        
+        initial_state = AdvancedAgentState(
+            messages=[HumanMessage(content="test question")],
+            complexity_score=0.0,
+            retry_count=0,
+            ...
+        )
+        
+        # Run through planner node
+        state_after_planner = await graph_agent.planner_node(initial_state)
+        assert state_after_planner["complexity_score"] > 0
+        assert state_after_planner["execution_plan"] is not None
+        
+        # Run through executor node
+        state_after_executor = await graph_agent.executor_node(state_after_planner)
+        assert len(state_after_executor["step_results"]) > 0
+        
+        # Run through reflection node
+        state_after_reflection = await graph_agent.reflection_node(state_after_executor)
+        assert state_after_reflection["reflection_score"] >= 0
+    
+    @pytest.mark.asyncio
+    async def test_parallel_execution_subgraph(self):
+        """Test parallel execution of independent steps."""
+        parallel_graph = ParallelExecutionSubgraph(mock_research)
+        
+        independent_steps = [
+            SubQuestion(
+                step_id="step_1",
+                question="Question 1",
+                suggested_tool="web_search",
+                dependencies=[],
+                can_run_parallel=True
+            ),
+            SubQuestion(
+                step_id="step_2",
+                question="Question 2",
+                suggested_tool="rag",
+                dependencies=[],
+                can_run_parallel=True
+            )
+        ]
+        
+        graph = parallel_graph.build_parallel_graph(independent_steps)
+        
+        # Check that both steps are entry points (can run in parallel)
+        assert "step_1" in graph.nodes
+        assert "step_2" in graph.nodes
+        assert "merge_results" in graph.nodes
+```
+
 **Integration Tests**:
 
-1. **End-to-End Query Flow**:
-   - Simple query → reflection → response
-   - Complex query → planning → multi-step execution → synthesis
+1. **End-to-End LangGraph Flow**:
+   - Simple query → planner → executor → reflection → synthesis → done
+   - Complex query → planner → multi-step execution → synthesis → done
+   - Query with low reflection score → retry loop → success
    - Query with code execution → sandbox → results
    - Query with streaming → chunks → completion
 
-2. **Error Recovery**:
+2. **LangGraph Retry Loop Integration**:
+   - Low reflection score → retry → improved result
+   - Max retries exhausted → proceed with warning
+   - Retry with different tool → success
+   - Retry with refined query → success
+
+3. **Multi-Step Execution with LangGraph**:
+   - Complex query → plan with 3 steps → execute all → synthesize
+   - Step with dependencies → wait for dependencies → execute
+   - Independent steps → parallel execution → merge results
+   - Step failure → replan → continue
+
+4. **Error Recovery**:
    - Low reflection score → retry → success
    - Step failure → replan → completion
    - Code timeout → error handling
    - Streaming disconnect → reconnection
 
-3. **Memory Integration**:
+5. **Memory Integration**:
    - Store conversation → retrieve in new session
    - Learn from error → suggest strategy for similar error
    - Extract preference → apply in future queries
 
-4. **Security Integration**:
+6. **Security Integration**:
    - Malicious code → rejection
    - Cross-user memory access → blocked
    - Rate limit exceeded → throttled
    - Invalid JWT → authentication failure
+
+**LangGraph Integration Test Example**:
+```python
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_end_to_end_complex_query_with_retry():
+    """Test complete workflow with retry loop."""
+    # Setup
+    graph_agent = AdvancedAgentGraph(
+        multi_step_planner=real_planner,
+        self_reflection=real_reflection,
+        tool_registry=real_registry,
+        streaming_engine=real_streaming,
+        long_term_memory=real_memory,
+        research_orchestrator=real_research
+    )
+    
+    # Execute complex query
+    result = await graph_agent.execute_query(
+        question="Analyze Bitcoin price trends and predict next week",
+        user_id="test_user",
+        conversation_id="test_conv",
+        session_id="test_session"
+    )
+    
+    # Verify
+    assert result["success"] is True
+    assert len(result["answer"]) > 0
+    assert result["plan"] is not None
+    assert result["plan"]["num_steps"] >= 2
+    assert result["reflection_score"] >= 70
+    
+    # Verify streaming chunks were sent
+    chunks = await real_streaming.get_session_chunks("test_session")
+    assert any(c.chunk_type == ChunkType.PLAN for c in chunks)
+    assert any(c.chunk_type == ChunkType.REFLECTION for c in chunks)
+    assert any(c.chunk_type == ChunkType.DONE for c in chunks)
+```
 
 **Performance Tests**:
 
@@ -4305,18 +5047,30 @@ def downgrade():
 
 ## Summary
 
-Advanced Agent Phase 3 nâng cấp Research Agent với các khả năng autonomous cao hơn:
+Advanced Agent Phase 3 nâng cấp Research Agent với các khả năng autonomous cao hơn sử dụng LangGraph:
 
 **Core Enhancements**:
-- Self-Reflection: Tự đánh giá và sửa lỗi với retry strategies
-- Multi-Step Planning: Phân tách câu hỏi phức tạp thành execution plans
-- Code Execution: Chạy Python code an toàn trong Docker sandbox
-- Streaming: Real-time responses qua Server-Sent Events
-- Long-Term Memory: Học từ conversations và user preferences
-- Tool Registry: Đăng ký custom tools động
+- **LangGraph Orchestration**: StateGraph với conditional routing và retry loops
+- **Self-Reflection**: Tự đánh giá và sửa lỗi với retry strategies (implemented as graph cycles)
+- **Multi-Step Planning**: Phân tách câu hỏi phức tạp thành execution plans (dynamic graph nodes)
+- **Parallel Execution**: Independent steps execute in parallel (LangGraph parallel branches)
+- **Code Execution**: Chạy Python code an toàn trong Docker sandbox
+- **Streaming**: Real-time responses qua Server-Sent Events (integrated with LangGraph events)
+- **Long-Term Memory**: Học từ conversations và user preferences
+- **Tool Registry**: Đăng ký custom tools động
+
+**LangGraph Architecture**:
+- Main graph: entry → planner → executor → reflection → (retry loop or next step) → synthesis → citation → end
+- Conditional edges route based on reflection scores và step completion
+- Retry loop implemented as cycle với max 3 iterations
+- State management tracks complexity, plans, results, reflection scores, retry counts
+- Parallel execution subgraph for independent steps
+- Streaming integration sends events from each node
 
 **Architecture Principles**:
 - Backward compatible với Phase 2 Research Agent
+- LangGraph provides declarative workflow definition
+- State-based execution with automatic checkpointing
 - Graceful degradation khi dependencies unavailable
 - Horizontal scaling với Redis session sharing
 - Comprehensive monitoring và alerting
@@ -4324,8 +5078,9 @@ Advanced Agent Phase 3 nâng cấp Research Agent với các khả năng autonom
 
 **Testing Approach**:
 - 49 correctness properties với property-based testing
-- Unit tests cho components và edge cases
-- Integration tests cho end-to-end flows
+- Unit tests cho components, nodes, và edge cases
+- LangGraph-specific tests for workflow, routing, và state updates
+- Integration tests cho end-to-end flows với retry loops
 - Performance tests cho scalability
 - Security tests cho all constraints
 
@@ -4336,4 +5091,14 @@ Advanced Agent Phase 3 nâng cấp Research Agent với các khả năng autonom
 - Multi-region support
 - Database migrations
 
-Hệ thống được thiết kế để mở rộng dễ dàng với new tools, new memory types, và new reflection strategies trong tương lai.
+**LangGraph Benefits**:
+- Declarative workflow definition (easier to understand và maintain)
+- Built-in state management với reducers
+- Automatic retry loop handling với conditional edges
+- Parallel execution support
+- Streaming events from graph execution
+- Easier testing với graph inspection
+- Better visualization of workflow
+- Extensible với custom nodes và edges
+
+Hệ thống được thiết kế để mở rộng dễ dàng với new tools, new memory types, new reflection strategies, và new graph nodes trong tương lai.
