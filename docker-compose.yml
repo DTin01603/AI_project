@@ -1,4 +1,15 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: ai-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -6,8 +17,14 @@ services:
     container_name: ai-backend
     env_file:
       - .env
+    environment:
+      ADVANCED_REDIS_ENABLED: ${ADVANCED_REDIS_ENABLED:-true}
+      ADVANCED_REDIS_URL: ${ADVANCED_REDIS_URL:-redis://redis:6379/0}
     ports:
       - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
 
   frontend:
     build:
@@ -17,6 +34,6 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_PROXY_TARGET: http://backend:8000
+      VITE_PROXY_TARGET: ${VITE_PROXY_TARGET:-http://backend:8000}
     depends_on:
       - backend
