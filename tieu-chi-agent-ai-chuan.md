@@ -25,6 +25,9 @@ fallback_models = ["gpt-3.5-turbo", "claude-3-sonnet"]
 
 - **Short-term Memory**: Nhớ được đoạn chat vừa rồi (context window)
 - **Long-term Memory**: Lưu trữ kiến thức lâu dài (vector database)
+<!-- [MermaidChart: a712d97d-8761-453f-b01f-4d76704f8151] -->
+<!-- [MermaidChart: e761ff09-c8b5-4b72-9447-bcd890549d6a] -->
+<!-- [MermaidChart: e761ff09-c8b5-4b72-9447-bcd890549d6a] -->
 - **Working Memory**: Trạng thái tạm thời khi đang làm việc
 
 **Ví dụ**:
