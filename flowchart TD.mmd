@@ -1,43 +1,49 @@
 flowchart TD
-    Start([User Request]) --> Orchestrator[ORCHESTRATOR<br/>Core Engine]
+    Start([User Request]) --> Orchestrator[ORCHESTRATOR]
+
     
-    Orchestrator --> Parse[1. Parse Request<br/>Phân tích yêu cầu]
+    Orchestrator --> Parse[1. Parse<br/>Phân tích]
     
-    Parse --> Plan[2. Plan Execution<br/>Lập kế hoạch]
+    Parse --> Plan[2. Plan<br/>Đánh giá]
     
-    Plan --> Route{3. Route & Dispatch<br/>Định tuyến}
+    Plan --> Classify{Simple?}
     
-    Route -->|Research| RA[Research Agent<br/>Tìm kiếm thông tin]
-    Route -->|Code| CA[Code Agent<br/>Thực thi code]
-    Route -->|Chat| ChatA[Chat Agent<br/>Trò chuyện]
-    Route -->|Tool| TA[Tool Agent<br/>Gọi APIs]
+    %% Simple path
+    Classify -->|Yes<br/>< 0.3| DirectLLM[Direct LLM<br/>Trả lời trực tiếp]
+    DirectLLM --> Format
     
-    RA --> Collect[4. Collect Results<br/>Thu thập kết quả]
-    CA --> Collect
-    ChatA --> Collect
-    TA --> Collect
+    %% Complex path
+    Classify -->|No<br/>>= 0.3| Route{3. Route}
     
-    Collect --> Validate{5. Validate<br/>Kiểm tra}
+    Route -->|Cần tìm kiếm| Research[Research Agent<br/>Web + Documents]
+    Route -->|Cần tính toán| Code[Code Agent<br/>Python execution]
+    Route -->|Cần API| Tool[Tool Agent<br/>External APIs]
     
-    Validate -->|OK| Format[6. Format Response<br/>Định dạng]
-    Validate -->|Failed| Retry{Retry?<br/>< 3 lần}
+    Research --> Collect[4. Collect<br/>Thu thập]
+    Code --> Collect
+    Tool --> Collect
+    
+    Collect --> Validate{5. Validate<br/>OK?}
+    
+    Validate -->|Yes| Format[6. Format<br/>Định dạng]
+    Validate -->|No| Retry{Retry?<br/>< 3}
     
     Retry -->|Yes| Route
-    Retry -->|No| Fallback[Fallback<br/>Kết quả tốt nhất]
+    Retry -->|No| Fallback[Fallback]
     Fallback --> Format
     
-    Format --> Response([Final Response])
+    Format --> Response([Response])
     
     %% Error handling
-    RA -.->|Error| ErrorHandler[Error Handler]
-    CA -.->|Error| ErrorHandler
-    ChatA -.->|Error| ErrorHandler
-    TA -.->|Error| ErrorHandler
+    Research -.->|Error| ErrorHandler[Error<br/>Handler]
+    Code -.->|Error| ErrorHandler
+    Tool -.->|Error| ErrorHandler
+    DirectLLM -.->|Error| ErrorHandler
     ErrorHandler -.-> Retry
     
     %% Monitoring
-    State[(State<br/>Trạng thái)]
-    Metrics[Metrics<br/>Giám sát]
+    State[(State)]
+    Metrics[Metrics]
     
     Orchestrator -.-> State
     Route -.-> State
@@ -47,23 +53,26 @@ flowchart TD
     Validate -.-> Metrics
     
     style Orchestrator fill:#FFE5E5,stroke:#FF6B6B,stroke-width:3px,color:#000
-    style Parse fill:#FFF4E5,stroke:#FFB84D,stroke-width:2px,color:#000
+    style Classify fill:#E5F9FF,stroke:#00BCD4,stroke-width:3px,color:#000
+    style DirectLLM fill:#E8F5E9,stroke:#4CAF50,stroke-width:3px,color:#000
+    style Route fill:#E5F5FF,stroke:#2196F3,stroke-width:3px,color:#000
+    style Validate fill:#E5FFE5,stroke:#8BC34A,stroke-width:3px,color:#000
+    
+    style Research fill:#E1F5FE,stroke:#03A9F4,stroke-width:2px,color:#000
+    style Code fill:#E8EAF6,stroke:#5C6BC0,stroke-width:2px,color:#000
+    style Tool fill:#FFF9C4,stroke:#FDD835,stroke-width:2px,color:#000
+    
+    style Parse fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#000
     style Plan fill:#FFF9E5,stroke:#FFD93D,stroke-width:2px,color:#000
-    style Route fill:#E5F5FF,stroke:#4DA6FF,stroke-width:3px,color:#000
-    style Validate fill:#E5FFE5,stroke:#6BCF7F,stroke-width:3px,color:#000
-    style Format fill:#F0E5FF,stroke:#B366FF,stroke-width:2px,color:#000
-    style ErrorHandler fill:#FFE5E5,stroke:#FF9999,stroke-width:2px,color:#000
+    style Format fill:#F3E5F5,stroke:#AB47BC,stroke-width:2px,color:#000
+    style Collect fill:#FFE0B2,stroke:#FB8C00,stroke-width:2px,color:#000
     
-    style RA fill:#E5F9FF,stroke:#4ECDC4,stroke-width:2px,color:#000
-    style CA fill:#E5F3FF,stroke:#45B7D1,stroke-width:2px,color:#000
-    style ChatA fill:#E5FFE9,stroke:#96CEB4,stroke-width:2px,color:#000
-    style TA fill:#FFFBE5,stroke:#FFEAA7,stroke-width:2px,color:#000
-    
-    style State fill:#F5E5FF,stroke:#D4A5FF,stroke-width:2px,color:#000
-    style Metrics fill:#FFE5D9,stroke:#FAB1A0,stroke-width:2px,color:#000
-    
-    style Start fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#000
-    style Response fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#000
-    style Collect fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#000
+    style ErrorHandler fill:#FFEBEE,stroke:#EF5350,stroke-width:2px,color:#000
     style Retry fill:#FFF9C4,stroke:#FDD835,stroke-width:2px,color:#000
-    style Fallback fill:#FFEBEE,stroke:#EF5350,stroke-width:2px,color:#000
+    style Fallback fill:#FFCDD2,stroke:#E57373,stroke-width:2px,color:#000
+    
+    style State fill:#F3E5F5,stroke:#CE93D8,stroke-width:2px,color:#000
+    style Metrics fill:#FFE0B2,stroke:#FFAB91,stroke-width:2px,color:#000
+    
+    style Start fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000
+    style Response fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000
