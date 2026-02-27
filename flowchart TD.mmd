@@ -1,78 +1,50 @@
 flowchart TD
     Start([User Request]) --> Orchestrator[ORCHESTRATOR]
-
     
-    Orchestrator --> Parse[1. Parse<br/>Phân tích]
+    Orchestrator --> Parse[1. Parse<br/>Phân tích request]
     
-    Parse --> Plan[2. Plan<br/>Đánh giá]
+    Parse --> PlanningAgent[2. Planning Agent<br/>Phân tích & tạo plan]
     
-    Plan --> Classify{Simple?}
+    PlanningAgent --> Decision{Task đơn giản?}
     
-    %% Simple path
-    Classify -->|Yes<br/>< 0.3| DirectLLM[Direct LLM<br/>Trả lời trực tiếp]
+    %% Simple path - Direct LLM
+    Decision -->|Yes| DirectLLM[Direct LLM<br/>Trả lời trực tiếp]
     DirectLLM --> Format
     
-    %% Complex path
-    Classify -->|No<br/>>= 0.3| Route{3. Route}
+    %% Complex path - Multi-agent
+    Decision -->|No| Execute[3. Execute Tasks<br/>Thực thi song song/tuần tự]
     
-    Route -->|Cần tìm kiếm| Research[Research Agent<br/>Web + Documents]
-    Route -->|Cần tính toán| Code[Code Agent<br/>Python execution]
-    Route -->|Cần API| Tool[Tool Agent<br/>External APIs]
+    Execute -->|Task: Research| Research[Research Agent<br/>Web + Documents]
+    Execute -->|Task: Code| Code[Code Agent<br/>Python execution]
+    Execute -->|Task: Tool| Tool[Tool Agent<br/>External APIs]
     
-    Research --> Collect[4. Collect<br/>Thu thập]
+    Research --> Collect[4. Collect<br/>Tổng hợp kết quả]
     Code --> Collect
     Tool --> Collect
     
-    Collect --> Validate{5. Validate<br/>OK?}
-    
-    Validate -->|Yes| Format[6. Format<br/>Định dạng]
-    Validate -->|No| Retry{Retry?<br/>< 3}
-    
-    Retry -->|Yes| Route
-    Retry -->|No| Fallback[Fallback]
-    Fallback --> Format
+    Collect --> Format[5. Format<br/>Định dạng response]
     
     Format --> Response([Response])
     
     %% Error handling
-    Research -.->|Error| ErrorHandler[Error<br/>Handler]
-    Code -.->|Error| ErrorHandler
-    Tool -.->|Error| ErrorHandler
-    DirectLLM -.->|Error| ErrorHandler
-    ErrorHandler -.-> Retry
+    Research -.->|Error| Retry[Retry hoặc Skip]
+    Code -.->|Error| Retry
+    Tool -.->|Error| Retry
+    DirectLLM -.->|Error| Retry
+    Retry -.-> Execute
     
-    %% Monitoring
-    State[(State)]
-    Metrics[Metrics]
-    
-    Orchestrator -.-> State
-    Route -.-> State
-    Collect -.-> State
-    
-    Orchestrator -.-> Metrics
-    Validate -.-> Metrics
-    
+    %% Styling
     style Orchestrator fill:#FFE5E5,stroke:#FF6B6B,stroke-width:3px,color:#000
-    style Classify fill:#E5F9FF,stroke:#00BCD4,stroke-width:3px,color:#000
+    style PlanningAgent fill:#E3F2FD,stroke:#1976D2,stroke-width:4px,color:#000
+    style Decision fill:#E5F9FF,stroke:#00BCD4,stroke-width:3px,color:#000
     style DirectLLM fill:#E8F5E9,stroke:#4CAF50,stroke-width:3px,color:#000
-    style Route fill:#E5F5FF,stroke:#2196F3,stroke-width:3px,color:#000
-    style Validate fill:#E5FFE5,stroke:#8BC34A,stroke-width:3px,color:#000
-    
+    style Execute fill:#FFF3E0,stroke:#F57C00,stroke-width:3px,color:#000
     style Research fill:#E1F5FE,stroke:#03A9F4,stroke-width:2px,color:#000
     style Code fill:#E8EAF6,stroke:#5C6BC0,stroke-width:2px,color:#000
     style Tool fill:#FFF9C4,stroke:#FDD835,stroke-width:2px,color:#000
-    
     style Parse fill:#FFF3E0,stroke:#FF9800,stroke-width:2px,color:#000
-    style Plan fill:#FFF9E5,stroke:#FFD93D,stroke-width:2px,color:#000
     style Format fill:#F3E5F5,stroke:#AB47BC,stroke-width:2px,color:#000
     style Collect fill:#FFE0B2,stroke:#FB8C00,stroke-width:2px,color:#000
-    
-    style ErrorHandler fill:#FFEBEE,stroke:#EF5350,stroke-width:2px,color:#000
-    style Retry fill:#FFF9C4,stroke:#FDD835,stroke-width:2px,color:#000
-    style Fallback fill:#FFCDD2,stroke:#E57373,stroke-width:2px,color:#000
-    
-    style State fill:#F3E5F5,stroke:#CE93D8,stroke-width:2px,color:#000
-    style Metrics fill:#FFE0B2,stroke:#FFAB91,stroke-width:2px,color:#000
-    
+    style Retry fill:#FFCDD2,stroke:#E57373,stroke-width:2px,color:#000
     style Start fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000
     style Response fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000
