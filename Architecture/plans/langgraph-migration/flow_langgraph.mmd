@@ -1,0 +1,83 @@
+flowchart TD
+    Start([User Request]) --> Graph
+    
+    subgraph Graph[" 🎯 LANGGRAPH StateGraph "]
+        direction TB
+        
+        subgraph State[" 📦 AgentState (Shared State) "]
+            direction LR
+            S1[messages<br/>complexity<br/>research_plan]
+            S2[research_results<br/>knowledge_base<br/>sources]
+            S3[final_answer<br/>error<br/>metadata]
+        end
+        
+        Input[Input Node<br/>Parse & Validate<br/>📡 parsing_request]
+        Router[Router Node<br/>Complexity Analysis<br/>📡 analyzing_complexity]
+        Decision{Conditional<br/>Edge}
+        
+        subgraph SimplePath[" ⚡ Simple Path "]
+            DirectLLM[Direct LLM Node<br/>Generate Response<br/>📡 generating_response]
+        end
+        
+        subgraph ComplexPath[" 🔍 Complex Path "]
+            direction TB
+            Planning[Planning Node<br/>Create Research Plan<br/>📡 creating_research_plan]
+            
+            Research[Research Node<br/>✅ PARALLEL EXECUTION<br/>📡 researching_task]
+            
+            subgraph Parallel[" ⚡ Parallel Tasks "]
+                direction LR
+                Task1[Task 1<br/>Search + Extract<br/>📡 task_complete]
+                Task2[Task 2<br/>Search + Extract<br/>📡 task_complete]
+                Task3[Task 3<br/>Search + Extract<br/>📡 task_complete]
+            end
+            
+            Aggregate[Aggregate Node<br/>Combine Results<br/>📡 research_complete]
+            Compose[Compose Node<br/>Generate Answer<br/>📡 composing_response]
+            
+            Planning --> Research
+            Research --> Parallel
+            Parallel --> Aggregate
+            Aggregate --> Compose
+        end
+        
+        Input --> Router
+        Router --> Decision
+        Decision -->|simple| DirectLLM
+        Decision -->|complex| Planning
+        DirectLLM --> End
+        Compose --> End
+        
+        State -.->|read/write| Input
+        State -.->|read/write| Router
+        State -.->|read/write| DirectLLM
+        State -.->|read/write| Planning
+        State -.->|read/write| Research
+        State -.->|read/write| Aggregate
+        State -.->|read/write| Compose
+    end
+    
+    Graph --> End([END])
+    End --> Response([Response])
+    
+    %% Styling
+    linkStyle default stroke:#000,stroke-width:2px
+    style Graph fill:#E8F5E9,stroke:#4CAF50,stroke-width:3px,color:#000
+    style State fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#000
+    style Input fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#000
+    style Router fill:#E3F2FD,stroke:#1976D2,stroke-width:3px,color:#000
+    style Decision fill:#E5F9FF,stroke:#00BCD4,stroke-width:3px,color:#000
+    style SimplePath fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#000
+    style DirectLLM fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#000
+    style ComplexPath fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#000
+    style Planning fill:#FFF3E0,stroke:#F57C00,stroke-width:3px,color:#000
+    style Research fill:#81C784,stroke:#4CAF50,stroke-width:3px,color:#000
+    style Parallel fill:#C8E6C9,stroke:#66BB6A,stroke-width:3px,color:#000
+    style Task1 fill:#C8E6C9,stroke:#66BB6A,color:#000
+    style Task2 fill:#C8E6C9,stroke:#66BB6A,color:#000
+    style Task3 fill:#C8E6C9,stroke:#66BB6A,color:#000
+    style Aggregate fill:#FFE0B2,stroke:#FB8C00,stroke-width:2px,color:#000
+    style Compose fill:#F3E5F5,stroke:#AB47BC,stroke-width:2px,color:#000
+    style Start fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000
+    style End fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000
+    style Response fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000

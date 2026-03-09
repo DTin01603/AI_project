@@ -1,0 +1,56 @@
+flowchart TD
+    Start([User Request]) --> Orchestrator
+    
+    subgraph Orchestrator[" 🎯 ORCHESTRATOR "]
+        direction TB
+        Parse[1. Parse Request<br/>Làm sạch & chuẩn hóa<br/>📡 parsing_request]
+        Complexity[2. Complexity Analyzer<br/>Phân tích độ phức tạp<br/>📡 analyzing_complexity]
+        Decision{Simple?}
+        
+        subgraph SimplePath[" ⚡ Simple Path "]
+            direction TB
+            DirectLLM[3. Direct LLM<br/>Trả lời trực tiếp<br/>📡 generating_response]
+            FormatSimple[4. Format Response<br/>📡 response_chunk]
+        end
+        
+        subgraph ComplexPath[" 🔍 Complex Path "]
+            direction LR
+            Planning[3. Planning Agent<br/>Tạo Research Plan<br/>📡 creating_research_plan<br/>━━━━━━━━━━━━━━━<br/>Tool: 🔍 Research Tool]
+            ExecuteLoop[4. Execute Research Tasks<br/>Thực thi tuần tự<br/>📡 researching_task]
+            Research[🔍 Research Task<br/>Web Search + Extract Info<br/>📡 task_complete]
+            Collect[5. Aggregate Results<br/>Tổng hợp kết quả<br/>📡 research_complete]
+            FormatComplex[6. Compose Response<br/>LLM viết response<br/>📡 composing_response]
+            
+            Planning --> ExecuteLoop --> Research --> Collect --> FormatComplex
+        end
+        
+        Parse --> Complexity
+        Complexity --> Decision
+        Decision -->|Yes| DirectLLM
+        Decision -->|No| Planning
+        DirectLLM --> FormatSimple
+    end
+    
+    Orchestrator --> Response([Response])
+    
+    %% Styling
+    linkStyle default stroke:#000,stroke-width:2px
+    
+    style Orchestrator fill:#FFE5E5,stroke:#FF6B6B,stroke-width:3px,color:#000
+    style Parse fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#000
+    style Complexity fill:#E3F2FD,stroke:#1976D2,stroke-width:3px,color:#000
+    style Decision fill:#E5F9FF,stroke:#00BCD4,stroke-width:3px,color:#000
+    
+    style SimplePath fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#000
+    style DirectLLM fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#000
+    style FormatSimple fill:#F3E5F5,stroke:#AB47BC,stroke-width:2px,color:#000
+    
+    style ComplexPath fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#000
+    style Planning fill:#FFF3E0,stroke:#F57C00,stroke-width:3px,color:#000
+    style ExecuteLoop fill:#E8EAF6,stroke:#5C6BC0,stroke-width:2px,color:#000
+    style Research fill:#E1F5FE,stroke:#03A9F4,stroke-width:2px,color:#000
+    style Collect fill:#FFE0B2,stroke:#FB8C00,stroke-width:2px,color:#000
+    style FormatComplex fill:#F3E5F5,stroke:#AB47BC,stroke-width:2px,color:#000
+    
+    style Start fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000
+    style Response fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#000

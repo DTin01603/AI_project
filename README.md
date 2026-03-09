@@ -1,31 +1,45 @@
 # AI Project
 
-## Environment security
+Research agent dùng FastAPI + LangGraph + React (Vite), hỗ trợ:
 
-- `os.getenv("...")` trong code chỉ hiển thị **tên biến môi trường**, không phải giá trị secret.
-- Secret thật phải nằm trong `.env` local (đã có trong `.gitignore`) hoặc secret manager của hạ tầng.
-- File mẫu an toàn là `.env.example` (không chứa key thật).
+- Chat thường (JSON response)
+- Chat streaming realtime qua SSE
+- Routing theo loại câu hỏi (simple/research/current_date/direct_llm)
+- Persist hội thoại bằng SQLite + LangGraph checkpointer
 
-Thiết lập nhanh:
+## 1) Chuẩn bị môi trường
+
+Tạo file env local:
 
 ```bash
 cp .env.example .env
 ```
 
-Sau đó thay các placeholder trong `.env` bằng key thật của bạn.
+Điền các biến quan trọng trong `.env`:
 
-Khuyến nghị bảo mật:
+- `GEMINI_API_KEY` hoặc `GOOGLE_API_KEY`
+- `GROQ_API_KEY`
+- `GOOGLE_SEARCH_API_KEY`
+- `GOOGLE_SEARCH_ENGINE_ID`
+- `DEFAULT_MODEL` (vd: `gemini/gemini-2.5-flash`)
+- `LANGGRAPH_CHECKPOINTER` (`sqlite` hoặc `postgres`)
+- `LANGGRAPH_DB_PATH` (mặc định `./checkpoints.db`)
+- `DATABASE_PATH` (mặc định `./data/conversations.db`)
 
-- Không commit `.env`.
-- Nếu key từng lộ ở screenshot/log/chat, hãy rotate ngay key tại nhà cung cấp (Gemini/Tavily).
+Lưu ý bảo mật:
 
-## Run locally (Docker Compose)
+- Không commit `.env`
+- Nếu key từng lộ, rotate key ngay
+
+## 2) Chạy project
+
+### Cách khuyến nghị: Docker Compose
 
 ```bash
 docker compose up --build
 ```
 
-Nếu muốn luôn dọn server cũ trước khi chạy lại (khuyến nghị để tránh trùng cổng/process cũ):
+Nếu cần dọn process/container cũ trước khi chạy:
 
 ```bash
 ./scripts/docker-up-clean.sh
@@ -35,99 +49,146 @@ Services:
 
 - Backend: `http://localhost:8000`
 - Frontend: `http://localhost:5173`
-- Prometheus metrics: `http://localhost:8000/metrics`
 
-## Kubernetes deployment
-
-Manifest cho production nằm tại:
-
-- `deploy/k8s/advanced-agent.yaml`
-
-Apply:
+### Chạy backend local (không Docker)
 
 ```bash
-kubectl apply -f deploy/k8s/advanced-agent.yaml
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=backend/src uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Manifest đã bao gồm:
+## 3) API hiện tại
 
-- Redis service (shared state)
-- Backend Deployment + Service + HPA (horizontal scaling)
-- Frontend Deployment + Service
+### Chat endpoint chính
 
-## Advanced Agent configuration
+- `POST /api/v2/chat`
+- Header response: `x-api-version: 2`
 
-Advanced Agent load config từ:
+Query param:
 
-1. Environment variables (ưu tiên cao nhất)
-2. JSON config file qua `ADVANCED_CONFIG_FILE`
-3. Default values trong code
+- `stream=false` (mặc định): trả JSON `ChatResponse`
+- `stream=true`: trả `text/event-stream` (SSE)
 
-Ví dụ dùng config file:
-
-```bash
-export ADVANCED_CONFIG_FILE=./backend/config/advanced.local.json
-```
-
-Ví dụ `backend/config/advanced.local.json`:
+Request body:
 
 ```json
 {
-  "enabled": true,
-  "reflection_score_threshold": 72,
-  "max_retries": 3,
-  "redis_enabled": true,
-  "redis_url": "redis://localhost:6379/0",
-  "monitoring_enabled": true,
-  "alerts_enabled": true
+	"message": "Giá vàng hôm nay bao nhiêu?",
+	"conversation_id": "optional-id",
+	"locale": "vi-VN",
+	"channel": "web",
+	"model": "gemini/gemini-2.5-flash"
 }
 ```
 
-### Configuration reference
+### Health/Readiness/Models
 
-| Variable | Default | Description |
-|---|---:|---|
-| `ADVANCED_AGENT_ENABLED` | `true` | Bật/tắt toàn bộ Advanced Agent |
-| `ADVANCED_REFLECTION_ENABLED` | `true` | Bật Self Reflection |
-| `ADVANCED_PLANNER_ENABLED` | `true` | Bật Multi-step planner |
-| `ADVANCED_CODE_EXECUTION_ENABLED` | `false` | Bật sandbox thực thi code |
-| `ADVANCED_REFLECTION_THRESHOLD` | `70` | Ngưỡng Reflection score pass (0-100) |
-| `ADVANCED_MAX_RETRIES` | `3` | Số lần retry tối đa |
-| `ADVANCED_CODE_TIMEOUT_SECONDS` | `30` | Timeout code execution |
-| `ADVANCED_CODE_MEMORY_MB` | `512` | Memory limit cho code execution |
-| `ADVANCED_STREAM_BUFFER_SIZE` | `100` | Số chunk buffer cho stream resume |
-| `ADVANCED_MEMORY_ENABLED` | `true` | Bật long-term memory |
-| `ADVANCED_MEMORY_RELEVANCE_THRESHOLD` | `0.6` | Ngưỡng relevance retrieval (0-1) |
-| `ADVANCED_MEMORY_RETRIEVAL_LIMIT` | `10` | Số memory entries tối đa trả về |
-| `ADVANCED_MEMORY_SUMMARY_TOKENS` | `10000` | Ngưỡng token để auto-summarize |
-| `ADVANCED_REDIS_ENABLED` | `false` | Bật Redis cho session memory chia sẻ |
-| `ADVANCED_REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
-| `ADVANCED_VECTOR_DB_ENABLED` | `false` | Bật vector DB dependency |
-| `ADVANCED_VECTOR_DB_BACKEND` | `inmemory` | Backend vector DB (`inmemory`, `qdrant`, ...) |
-| `ADVANCED_VECTOR_DB_URL` | _empty_ | URL health endpoint của vector DB |
-| `ADVANCED_MEMORY_ENCRYPTION_KEY` | _auto generated fallback_ | Fernet key để mã hóa memory at rest |
-| `ADVANCED_TOOL_REGISTRY_ENABLED` | `true` | Bật dynamic tool registry |
-| `ADVANCED_TOOL_TIMEOUT_SECONDS` | `60` | Timeout tool execution |
-| `ADVANCED_TOOL_FAILURE_THRESHOLD` | `10` | Số lỗi liên tiếp trước khi disable tool |
-| `ADVANCED_TOOL_RATE_LIMIT_PER_MINUTE` | `100` | Rate limit tool calls/user/phút |
-| `ADVANCED_MONITORING_ENABLED` | `true` | Bật thu thập Prometheus metrics |
-| `ADVANCED_ALERTS_ENABLED` | `true` | Bật tạo cảnh báo runtime |
-| `ADVANCED_CODE_TIMEOUT_ALERT_THRESHOLD` | `0.1` | Ngưỡng alert timeout rate của code execution |
-| `ADVANCED_STREAM_FAILURE_ALERT_THRESHOLD` | `0.05` | Ngưỡng alert stream connection failure rate |
+- `GET /health`
+- `GET /ready`
+- `GET /models`
 
-## Health, metrics, alerts
+### Versioning & error policy
 
-- `GET /health`: trả về status `ok` hoặc `degraded` + dependency health (`redis`, `vector_database`, `code_execution_sandbox`)
-- `GET /ready`: readiness check
-- `GET /metrics`: Prometheus metrics
-- `GET /alerts`: runtime alerts (reflection, timeout-rate, stream-failure-rate)
+- Contract chi tiết được chốt tại `API_CONTRACT.md`
+- Breaking change phải tạo version mới (`/api/v3/...`), không break trực tiếp v2
+- JSON errors chuẩn dùng các code: `BAD_REQUEST`, `INTERNAL_ERROR`, `MODEL_ERROR`, `EXECUTION_ERROR`
 
-## Long-term memory migration
+## 4) Ví dụ gọi API
 
-Migration scripts nằm tại `backend/migrations`.
-
-Chạy migration:
+### Non-stream
 
 ```bash
-psql "$DATABASE_URL" -f backend/migrations/001_create_long_term_memory_schema.sql
+curl -X POST 'http://localhost:8000/api/v2/chat' \
+	-H 'Content-Type: application/json' \
+	-d '{
+		"message":"Tóm tắt tình hình AI 2026",
+		"model":"gemini/gemini-2.5-flash"
+	}'
 ```
+
+### Streaming SSE
+
+```bash
+curl -N -X POST 'http://localhost:8000/api/v2/chat?stream=true' \
+	-H 'Content-Type: application/json' \
+	-d '{
+		"message":"Tìm 3 quán phở ngon ở Hà Nội",
+		"model":"gemini/gemini-2.5-flash"
+	}'
+```
+
+SSE stream sẽ phát:
+
+- nhiều event `status` (progress theo node)
+- 1 event `done` (answer/citations/metadata)
+- kết thúc bằng `data: [DONE]`
+
+## 5) Kiểm thử
+
+```bash
+pytest -q
+```
+
+## 6) Cấu trúc thư mục chính
+
+- `backend/src/research_agent/`: LangGraph runtime (graph, nodes, edges, streaming, checkpointer)
+- `backend/src/api/routers/chat_v2.py`: API chat v2 (stream + non-stream)
+- `frontend/`: React Vite app
+- `Architecture/`: tài liệu thiết kế, migration plan, flow diagrams
+
+## 7) Ghi chú kiến trúc
+
+- Stream mode dùng `graph.astream(..., stream_mode="updates")`
+- `SSEAdapter` chuyển từng node update thành SSE event để frontend render realtime
+- Persistence:
+	- Message history: `DATABASE_PATH`
+	- Graph checkpoints: `LANGGRAPH_DB_PATH` hoặc Postgres
+
+## 8) Deploy lên LangGraph Platform (Server logs view)
+
+Project đã có sẵn manifest deploy `langgraph.json` và graph entrypoint `backend/src/langgraph_platform.py`.
+
+### Chuẩn bị
+
+1. Đảm bảo `.env` có đầy đủ key model/search bạn dùng (`GEMINI_API_KEY` hoặc `GROQ_API_KEY`, `TAVILY_API_KEY` nếu cần).
+2. Cài CLI:
+
+```bash
+pip install -U langgraph-cli
+```
+
+### Chạy local bằng LangGraph runtime
+
+```bash
+langgraph dev
+```
+
+Khi runtime chạy, mở Studio/UI và chọn graph `research-agent`.
+
+### Deploy lên LangGraph Platform
+
+```bash
+langgraph up
+```
+
+Sau khi deploy thành công, vào Studio của deployment đó:
+
+1. Chạy thử graph 1 lần (invoke hoặc stream).
+2. Mở `Server logs view` để xem:
+   - Agent server operational logs.
+   - User application logs từ Python `logging` trong code.
+
+### Ghi log để hiện trong Server logs view
+
+Bạn có thể ghi log ở bất kỳ node/module nào:
+
+```python
+import logging
+
+logger = logging.getLogger("app.research")
+logger.info("Start research node", extra={"query": "gia vang hom nay"})
+```
+
+`backend/src/langgraph_platform.py` đã cấu hình logging cơ bản để log text xuất hiện trong server logs.
