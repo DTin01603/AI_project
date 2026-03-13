@@ -59,10 +59,74 @@ class Database:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)"
             )
+            
+            # Create FTS5 virtual table for full-text search
+            # Note: We don't use content= and content_rowid= because we want FTS5 to store its own copy
+            # This makes triggers simpler and more reliable
+            conn.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+                    message_id UNINDEXED,
+                    content,
+                    tokenize='porter unicode61'
+                )
+                """
+            )
+            
+            # Create triggers for automatic FTS index synchronization
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS messages_fts_insert 
+                AFTER INSERT ON messages BEGIN
+                    INSERT INTO messages_fts(message_id, content) 
+                    VALUES (new.id, new.content);
+                END
+                """
+            )
+            
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS messages_fts_delete 
+                AFTER DELETE ON messages BEGIN
+                    DELETE FROM messages_fts WHERE message_id = old.id;
+                END
+                """
+            )
+            
+            conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS messages_fts_update 
+                AFTER UPDATE ON messages BEGIN
+                    UPDATE messages_fts SET content = new.content WHERE message_id = new.id;
+                END
+                """
+            )
+            
+            # Populate FTS index from existing messages if needed
+            self._populate_fts_index(conn)
 
     @staticmethod
     def _now_iso() -> str:
         return datetime.now(timezone.utc).isoformat()
+    
+    def _populate_fts_index(self, conn: sqlite3.Connection) -> None:
+        """Populate FTS index from existing messages if not already populated."""
+        # Check if FTS index is empty
+        cursor = conn.execute("SELECT COUNT(*) FROM messages_fts")
+        fts_count = cursor.fetchone()[0]
+        
+        # Check if messages table has data
+        cursor = conn.execute("SELECT COUNT(*) FROM messages")
+        messages_count = cursor.fetchone()[0]
+        
+        # If FTS is empty but messages exist, populate the index
+        if fts_count == 0 and messages_count > 0:
+            conn.execute(
+                """
+                INSERT INTO messages_fts(message_id, content)
+                SELECT id, content FROM messages
+                """
+            )
 
     def create_conversation(self, conversation_id: str | None = None) -> str:
         # Create or reuse a conversation identifier.

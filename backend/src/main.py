@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from api.routers import chat_v2_router, core_router
+from api.routers import chat_v2_router, core_router, search_router
 
 
 def configure_logging() -> None:
@@ -109,6 +109,7 @@ def create_app() -> FastAPI:
 
     application.include_router(core_router)
     application.include_router(chat_v2_router)
+    application.include_router(search_router)
 
     return application
 

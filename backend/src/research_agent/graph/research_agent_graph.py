@@ -58,11 +58,21 @@ class ResearchAgentGraph:
         graph.add_node("citation", citation_node)
         graph.add_node(
             "simple_llm",
-            lambda state: simple_llm_node(state, self.dependencies["direct_llm"], self.dependencies["database"]),
+            lambda state: simple_llm_node(
+                state,
+                self.dependencies["direct_llm"],
+                self.dependencies["database"],
+                self.dependencies["retrieval_node"],
+            ),
         )
         graph.add_node(
             "direct_llm",
-            lambda state: direct_llm_node(state, self.dependencies["direct_llm"], self.dependencies["database"]),
+            lambda state: direct_llm_node(
+                state,
+                self.dependencies["direct_llm"],
+                self.dependencies["database"],
+                self.dependencies["retrieval_node"],
+            ),
         )
         graph.add_node("current_date", current_date_node)
         graph.add_node("persist", lambda state: persist_conversation_node(state, self.dependencies["database"]))

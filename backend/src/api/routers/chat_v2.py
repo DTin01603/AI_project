@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -14,8 +15,25 @@ from models.response import ChatResponse, ResponseError, ResponseMeta
 from research_agent.graph import ResearchAgentGraph
 from research_agent.streaming import SSEAdapter
 
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover - optional dependency at runtime
+    traceable = None
+
 router = APIRouter()
 logger = logging.getLogger("api.chat_v2")
+
+
+def _is_truthy_env(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _langsmith_manual_tracing_enabled() -> bool:
+    if traceable is None:
+        return False
+    if not os.getenv("LANGSMITH_API_KEY", "").strip():
+        return False
+    return _is_truthy_env("LANGSMITH_TRACING") or _is_truthy_env("LANGCHAIN_TRACING_V2")
 
 
 def _map_execution_error(error: Exception) -> tuple[str, str]:
@@ -35,7 +53,11 @@ async def run_chat_v2_non_stream(
 ) -> ChatResponse:
     """Run LangGraph request and map final state to ChatResponse."""
     try:
-        final_state = await graph.ainvoke(payload, request_id=request_id)
+        if _langsmith_manual_tracing_enabled():
+            traced_invoke = traceable(name="api.v2.chat.non_stream", run_type="chain")(graph.ainvoke)
+            final_state = await traced_invoke(payload, request_id=request_id)
+        else:
+            final_state = await graph.ainvoke(payload, request_id=request_id)
     except Exception as execution_error:
         code, mapped_message = _map_execution_error(execution_error)
         logger.exception("chat_v2_execution_error request_id=%s error=%s", request_id, execution_error)

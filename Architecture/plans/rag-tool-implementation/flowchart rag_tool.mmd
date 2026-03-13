@@ -1,0 +1,76 @@
+flowchart TB
+    subgraph Input["📥 INPUT - Đưa dữ liệu vào"]
+        Conv[💬 Conversations]
+        Docs[📄 Documents<br/>PDF/DOCX/MD]
+        Code[💻 Code Files<br/>Python/JS/TS]
+    end
+    
+    subgraph Indexing["🔨 INDEXING PIPELINE"]
+        Load[1️⃣ Document Loader<br/>Đọc & parse file]
+        Chunk[2️⃣ Chunker<br/>Chia nhỏ (mặc định ~512 tokens, có thể cấu hình)]
+        
+        subgraph Parallel["⚡ Xử lý song song"]
+            SaveText[💾 Lưu Text gốc<br/>→ SQLite]
+            Embed[🧠 Embedding Model<br/>Text → Vector]
+        end
+    end
+    
+    subgraph Storage["💾 STORAGE"]
+        SQLite[(SQLite Database<br/>━━━━━━━━━━━<br/>📋 messages table<br/>🔍 messages_fts FTS5<br/>━━━━━━━━━━━<br/>✅ Text gốc<br/>✅ Metadata<br/>✅ Keyword search)]
+        
+        VectorDB[(Vector Store<br/>━━━━━━━━━━━<br/>📦 Embeddings<br/>━━━━━━━━━━━<br/>✅ Vector arrays<br/>✅ Semantic search)]
+    end
+    
+    subgraph Retrieval["🔍 RETRIEVAL"]
+        Query[👤 User Query]
+        Expand[Query Expansion]
+        
+        subgraph Search["🔀 Hybrid Search"]
+            FTS[📝 FTS Search<br/>Keyword matching]
+            Vector[🧠 Vector Search<br/>Semantic similarity]
+        end
+        
+        Merge[🔗 Merge & Deduplicate]
+        ReRank[⭐ Re-Rank<br/>Sắp xếp theo relevance]
+        Compress[🗜️ Compression<br/>Loại bỏ thông tin dư]
+        Results[📄 Final Results]
+    end
+    
+    %% INDEXING FLOW - TẤT CẢ ĐỀU ĐI QUA CHUNK
+    Conv --> Chunk
+    Docs --> Load
+    Code --> Load
+    Load --> Chunk
+    
+    %% TẤT CẢ ĐỀU LƯU CẢ TEXT VÀ VECTOR
+    Chunk --> SaveText
+    Chunk --> Embed
+    
+    SaveText --> SQLite
+    Embed --> VectorDB
+    
+    %% RETRIEVAL FLOW
+    Query --> Expand
+    Expand --> FTS
+    Expand --> Vector
+    
+    %% FTS tìm trong SQLite
+    FTS --> SQLite
+    SQLite -.->|Text results| Merge
+    
+    %% Vector search cần embed query trước
+    Vector --> Embed
+    Embed --> VectorDB
+    VectorDB -.->|Vector results| Merge
+    
+    %% Merge và xử lý
+    Merge --> ReRank
+    ReRank --> Compress
+    Compress --> Results
+    
+    style Input fill:#e3f2fd
+    style Indexing fill:#fff3e0
+    style Parallel fill:#fff9c4
+    style Storage fill:#f3e5f5
+    style Retrieval fill:#e8f5e9
+    style Search fill:#ffe0b2

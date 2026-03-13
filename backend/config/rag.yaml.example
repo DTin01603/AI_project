@@ -1,0 +1,60 @@
+# RAG System Configuration Example
+# Copy this file to rag.yaml and customize as needed
+
+# Database configuration
+db_path: "data/rag.db"
+
+# Embedding configuration
+embedding_provider: "sentence-transformers"  # Options: sentence-transformers, openai
+embedding_model: "all-MiniLM-L6-v2"  # For sentence-transformers: all-MiniLM-L6-v2, all-mpnet-base-v2
+                                      # For openai: text-embedding-3-small, text-embedding-3-large
+embedding_dimension: 384  # 384 for all-MiniLM-L6-v2, 768 for all-mpnet-base-v2, 1536 for OpenAI
+
+# Vector store configuration
+vector_store_type: "chroma"  # Options: chroma, faiss
+vector_store_path: "data/vector_store"
+
+# Search configuration
+default_search_method: "hybrid"  # Options: fts, vector, hybrid
+fts_weight: 0.3  # Weight for FTS scores in hybrid search (must sum to 1.0 with vector_weight)
+vector_weight: 0.7  # Weight for vector scores in hybrid search
+default_top_k: 5  # Default number of results to return
+min_relevance_score: 0.3  # Minimum relevance score threshold
+
+# Re-ranking configuration
+enable_reranking: true
+reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+rerank_top_n: 100  # Number of candidates to re-rank
+
+# Chunking configuration
+chunk_size: 512  # Target chunk size in tokens
+chunk_overlap: 50  # Overlap between chunks in tokens
+chunking_strategy: "recursive"  # Options: recursive, semantic, code-aware
+
+# Advanced retrieval features
+enable_query_expansion: true
+enable_compression: false
+enable_multi_query: false
+query_expansion_count: 3
+
+# Memory management
+enable_summarization: true
+summarization_threshold: 50  # Message count threshold for summarization
+enable_consolidation: true
+consolidation_similarity: 0.85  # Similarity threshold for consolidation
+
+# Cleanup configuration
+cleanup_schedule: "0 2 * * *"  # Cron format: daily at 2 AM
+retention_period_days: 90
+min_importance_threshold: 0.3
+storage_limit_gb: null  # null for unlimited, or specify a number
+
+# Performance tuning
+max_concurrent_searches: 10
+cache_size: 1000
+batch_size: 32
+
+# LLM configuration (optional, for advanced features)
+llm_provider: null  # e.g., "openai", "anthropic"
+llm_model: null  # e.g., "gpt-4", "claude-3-opus"
+llm_api_key: null  # Or use environment variable
