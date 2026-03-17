@@ -7,6 +7,7 @@ from rag.conversation_indexer import ConversationIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from rag.retrieval_node import RetrievalNode
+from rag.subgraph import RAGSubgraph
 from rag.vector_store import ChromaVectorStore, build_conversation_collection_name
 from research_agent.aggregator import Aggregator
 from research_agent.complexity_analyzer import ComplexityAnalyzer
@@ -24,6 +25,7 @@ class GraphDependencies:
     direct_llm: DirectLLM
     database: ConversationIndexer  # Changed from Database to ConversationIndexer
     retrieval_node: RetrievalNode
+    rag_subgraph: RAGSubgraph
     research_tool: ResearchTool
     planning_agent: PlanningAgent
     aggregator: Aggregator
@@ -63,11 +65,18 @@ def _build_orchestrator_dependencies() -> GraphDependencies:
         config=rag_config,
     )
 
+    direct_llm = DirectLLM(model=settings.default_model)
+    rag_subgraph = RAGSubgraph(
+        retrieval_node=retrieval_node,
+        direct_llm=direct_llm,
+    )
+
     return GraphDependencies(
         analyzer=ComplexityAnalyzer(model=settings.default_model),
-        direct_llm=DirectLLM(model=settings.default_model),
+        direct_llm=direct_llm,
         database=database,
         retrieval_node=retrieval_node,
+        rag_subgraph=rag_subgraph,
         research_tool=ResearchTool(
             tavily_api_key=settings.tavily_api_key,
             llm_api_key=settings.active_llm_api_key(settings.default_model),
@@ -89,6 +98,7 @@ def get_research_agent_graph() -> ResearchAgentGraph:
             "direct_llm": dependencies.direct_llm,
             "database": dependencies.database,
             "retrieval_node": dependencies.retrieval_node,
+            "rag_subgraph": dependencies.rag_subgraph,
             "research_tool": dependencies.research_tool,
             "planning_agent": dependencies.planning_agent,
             "aggregator": dependencies.aggregator,

@@ -14,13 +14,12 @@ from research_agent.nodes import (
     citation_node,
     complexity_node,
     current_date_node,
-    direct_llm_node,
     entry_node,
+    llm_node,
     persist_conversation_node,
     planning_node,
     research_node,
     router_node,
-    simple_llm_node,
     synthesis_node,
 )
 from research_agent.state import AgentState
@@ -58,20 +57,26 @@ class ResearchAgentGraph:
         graph.add_node("citation", citation_node)
         graph.add_node(
             "simple_llm",
-            lambda state: simple_llm_node(
+            lambda state: llm_node(
                 state,
                 self.dependencies["direct_llm"],
                 self.dependencies["database"],
-                self.dependencies["retrieval_node"],
+                node_name="simple_llm",
+                fallback_answer="Xin lỗi, mình chưa thể tạo phản hồi lúc này.",
+                retrieval_node=self.dependencies.get("retrieval_node"),
+                rag_subgraph=self.dependencies.get("rag_subgraph"),
             ),
         )
         graph.add_node(
             "direct_llm",
-            lambda state: direct_llm_node(
+            lambda state: llm_node(
                 state,
                 self.dependencies["direct_llm"],
                 self.dependencies["database"],
-                self.dependencies["retrieval_node"],
+                node_name="direct_llm",
+                fallback_answer="Xin lỗi, hệ thống chưa xử lý được yêu cầu này ngay bây giờ.",
+                retrieval_node=self.dependencies.get("retrieval_node"),
+                rag_subgraph=self.dependencies.get("rag_subgraph"),
             ),
         )
         graph.add_node("current_date", current_date_node)

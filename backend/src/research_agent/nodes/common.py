@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from time import perf_counter
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rag.retrieval_node import RetrievalNode
 from research_agent.database import Database
 from research_agent.direct_llm import DirectLLM
 from research_agent.state import AgentState
+from research_agent.utils import get_execution_metadata, update_node_timing
 from research_agent.utils.model_runtime import resolve_and_apply_model
+from research_agent.utils.text import truncate
+
+if TYPE_CHECKING:
+    from rag.subgraph import RAGSubgraph
 
 
 def extract_last_message_content(state: AgentState) -> str:
@@ -35,8 +40,7 @@ def _prepare_document_context(retrieval_node: RetrievalNode, question: str) -> t
     for idx, doc in enumerate(retrieved, start=1):
         file_path = str(doc.metadata.get("file_path") or doc.metadata.get("file_name") or doc.id)
         snippet = doc.content.strip()
-        if len(snippet) > 800:
-            snippet = snippet[:800] + "..."
+        snippet = truncate(snippet, max_chars=800)
         blocks.append(f"[{idx}] {file_path}\n{snippet}")
         citations.append(file_path)
 
@@ -53,15 +57,16 @@ def run_llm_node(
     state: AgentState,
     direct_llm: DirectLLM,
     database: Database,
-    retrieval_node: RetrievalNode,
+    retrieval_node: RetrievalNode | None = None,
     *,
     node_name: str,
     fallback_answer: str,
+    rag_subgraph: "RAGSubgraph | None" = None,
 ) -> dict[str, Any]:
     started = perf_counter()
     question = extract_last_message_content(state)
 
-    metadata = dict(state.get("execution_metadata") or {})
+    metadata = get_execution_metadata(state)
     model = resolve_and_apply_model(metadata, direct_llm, fallback_model=getattr(direct_llm, "model", None))
     conversation_id = metadata.get("conversation_id")
     if not conversation_id:
@@ -72,16 +77,27 @@ def run_llm_node(
 
     try:
         history = database.get_conversation_history(conversation_id)
-        context_prompt, retrieved_citations, retrieval_meta = _prepare_document_context(retrieval_node, question)
-        augmented_question = question
-        if context_prompt:
-            augmented_question = f"{context_prompt}\n\n=== CAU HOI NGUOI DUNG ===\n{question}"
 
-        answer, provider, finish_reason = direct_llm.generate_response(
-            user_message=augmented_question,
-            history=history,
-            model=model,
-        )
+        if rag_subgraph is not None:
+            generation, retrieved_citations, retrieval_meta = rag_subgraph.run(
+                question, history
+            )
+            answer = generation or fallback_answer
+            provider = "rag_subgraph"
+            finish_reason = "stop"
+        else:
+            context_prompt, retrieved_citations, retrieval_meta = _prepare_document_context(
+                retrieval_node, question  # type: ignore[arg-type]
+            )
+            augmented_question = question
+            if context_prompt:
+                augmented_question = f"{context_prompt}\n\n=== CAU HOI NGUOI DUNG ===\n{question}"
+            answer, provider, finish_reason = direct_llm.generate_response(
+                user_message=augmented_question,
+                history=history,
+                model=model,
+            )
+
         for source in retrieved_citations:
             if source not in citations:
                 citations.append(source)
@@ -97,8 +113,7 @@ def run_llm_node(
         error = str(run_error)
         fallback_used = True
 
-    metadata.setdefault("node_timings", {})
-    metadata["node_timings"][node_name] = (perf_counter() - started) * 1000
+    metadata = update_node_timing(metadata, node_name, (perf_counter() - started) * 1000)
     metadata["llm"] = {"provider": provider, "model": model, "finish_reason": finish_reason}
 
     return {

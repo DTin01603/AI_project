@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from time import perf_counter
 from typing import Any
 
 from research_agent.database import Database
 from research_agent.nodes.common import extract_last_message_content
 from research_agent.state import AgentState
+from research_agent.utils import get_execution_metadata, node_timing_wrapper
 
 
+@node_timing_wrapper("persist")
 def persist_conversation_node(state: AgentState, database: Database) -> dict[str, Any]:
     """Persist current user/assistant turn for every execution branch."""
-    started = perf_counter()
-
-    metadata = dict(state.get("execution_metadata") or {})
+    metadata = get_execution_metadata(state)
     conversation_id = str(metadata.get("conversation_id") or "").strip()
     if not conversation_id:
         conversation_id = database.create_conversation()
@@ -32,8 +31,6 @@ def persist_conversation_node(state: AgentState, database: Database) -> dict[str
     except Exception as error:
         persistence_error = str(error)
 
-    metadata.setdefault("node_timings", {})
-    metadata["node_timings"]["persist"] = (perf_counter() - started) * 1000
     metadata["persistence"] = {
         "saved": persistence_saved,
         "error": persistence_error,
