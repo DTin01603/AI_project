@@ -1,23 +1,8 @@
-"""LangGraph node implementations for research agent."""
+"""LangGraph node implementations for the agent.
 
-from agent.nodes.citation_node import citation_node
-from agent.nodes.current_date_node import current_date_node
-from agent.nodes.entry_node import entry_node
-from agent.nodes.intent_node import intent_node
-from agent.nodes.llm_node import llm_node
-from agent.nodes.persist_conversation_node import persist_conversation_node
-from agent.nodes.planning_node import planning_node
-from agent.nodes.research_node import research_node
-from agent.nodes.synthesis_node import synthesis_node
-
-__all__ = [
-	"entry_node",
-	"persist_conversation_node",
-	"intent_node",
-	"planning_node",
-	"research_node",
-	"synthesis_node",
-	"citation_node",
-	"llm_node",
-	"current_date_node",
-]
+Intentionally empty: each node module is imported directly by callers
+(e.g. `from agent.nodes.citation_node import citation_node`) so that
+importing one node does not pull in skills + LLM SDKs transitively. This
+matters for unit tests that exercise a single node in environments where
+optional vendor SDKs are not installed.
+"""

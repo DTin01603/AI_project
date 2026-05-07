@@ -3,7 +3,7 @@ from __future__ import annotations
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 from agent.database import Database
 from agent.state import AgentState
 from agent.utils import get_execution_metadata, update_node_timing
@@ -12,7 +12,7 @@ from agent.utils.text import truncate
 from skills import get_registry
 
 if TYPE_CHECKING:
-    from rag.subgraph import RAGSubgraph
+    from agent.subgraph import RAGSubgraph
 
 
 def extract_last_message_content(state: AgentState) -> str:

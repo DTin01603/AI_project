@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 from agent.database import Database
 from agent.nodes.common import run_llm_node
 from agent.state import AgentState
 
 if TYPE_CHECKING:
-    from rag.subgraph import RAGSubgraph
+    from agent.subgraph import RAGSubgraph
 
 
 def llm_node(

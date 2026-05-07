@@ -24,7 +24,7 @@ from rag.config import RAGConfig, load_config
 from rag.conversation_indexer import ConversationIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 from rag.vector_store import ChromaVectorStore, build_conversation_collection_name
 from repositories.citation_repo import CitationRepository
 from repositories.conversation_repo import ConversationRepository
@@ -37,7 +37,7 @@ from services.conversation_indexing_service import ConversationIndexingService
 from services.conversation_service import ConversationService
 
 if TYPE_CHECKING:
-    from rag.subgraph import RAGSubgraph
+    from agent.subgraph import RAGSubgraph
     from agent.graph import ResearchAgentGraph
 
 DEFAULT_DB_PATH = "./data/conversations.db"
@@ -131,7 +131,7 @@ class AppContainer:
 
     @cached_property
     def rag_subgraph(self) -> "RAGSubgraph":
-        from rag.subgraph import RAGSubgraph
+        from agent.subgraph import RAGSubgraph
 
         return RAGSubgraph(retrieval_node=self.retrieval_node)
 

@@ -21,7 +21,7 @@ from api.schemas.search import (
 )
 from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 
 
 logger = logging.getLogger(__name__)

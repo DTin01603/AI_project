@@ -13,7 +13,7 @@ sys.path.insert(0, str(src_path))
 from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from rag.metrics import RAGMetrics, reset_metrics
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 from agent.database import Database
 
 

@@ -11,7 +11,7 @@ from rag.config import RAGConfig
 from rag.document_indexer import DocumentIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 from rag.vector_store import ChromaVectorStore
 from agent.database import Database
 

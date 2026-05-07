@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from agent.database import Database
 from rag.fts_engine import FTSEngine
 from rag.config import RAGConfig
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 
 
 def get_router():

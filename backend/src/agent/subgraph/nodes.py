@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from rag.retrieval_node import RetrievalNode
+from agent.nodes.retrieval_node import RetrievalNode
 from skills import SkillNotFoundError, get_registry
 
 logger = logging.getLogger(__name__)
