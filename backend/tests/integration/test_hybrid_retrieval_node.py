@@ -18,7 +18,7 @@ from services.retrieval_service import RetrievalService
 
 
 def _build_node(db_path: str, config: RAGConfig) -> RetrievalNode:
-    service = RetrievalService(fts_engine=FTSEngine(db_path), config=config)
+    service = RetrievalService(fts_engine=FTSEngine.from_db_path(db_path), config=config)
     return RetrievalNode(service=service)
 
 

@@ -59,7 +59,7 @@ def test_app_with_data():
         )
     
     # Initialize FTS engine to index messages
-    fts_engine = FTSEngine(db_path)
+    fts_engine = FTSEngine.from_db_path(db_path)
     
     # Create FastAPI app and include router
     app = FastAPI()
@@ -84,7 +84,7 @@ def test_client(test_app_with_data, monkeypatch):
         from services.retrieval_service import RetrievalService
 
         config = RAGConfig(db_path=db_path)
-        fts_engine = FTSEngine(db_path)
+        fts_engine = FTSEngine.from_db_path(db_path)
         service = RetrievalService(fts_engine=fts_engine, config=config)
         retrieval_node = RetrievalNode(service=service)
         return fts_engine, retrieval_node, config

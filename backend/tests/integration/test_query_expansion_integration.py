@@ -22,7 +22,7 @@ def test_retrieval_node_hybrid_query_expansion_metadata(tmp_path: Path):
     db.save_message(conv, "assistant", "Use OAuth2 authentication for API security")
 
     service = RetrievalService(
-        fts_engine=FTSEngine(db_path),
+        fts_engine=FTSEngine.from_db_path(db_path),
         config=RAGConfig(
             default_search_method="hybrid",
             enable_query_expansion=True,

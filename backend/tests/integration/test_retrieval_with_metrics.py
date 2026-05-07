@@ -65,7 +65,7 @@ def retrieval_node_with_metrics(temp_db):
     # Create FTS engine and retrieval node
     from services.retrieval_service import RetrievalService
 
-    fts_engine = FTSEngine(db_path)
+    fts_engine = FTSEngine.from_db_path(db_path)
     config = RAGConfig(default_search_method="fts")
     metrics = RAGMetrics()
 

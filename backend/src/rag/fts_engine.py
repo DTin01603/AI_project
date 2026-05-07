@@ -1,10 +1,15 @@
-"""Backward-compat facade over MessageRepository.search_fts and friends.
+"""Full-text search entry point built on the messages_fts virtual table.
 
-`SearchResult` is re-exported from models.search so legacy importers
-(rag.hybrid_search, rag.retrieval_node, rag.multi_query_retriever, rag.reranker,
-api.routers.search) keep working unchanged.
+`FTSEngine` is the public API for FTS5 search over conversation messages.
+It is a thin orchestration layer over `MessageRepository`, which owns the
+actual SQL because the FTS5 virtual table shares triggers with `messages`
+— keeping both behind one repository avoids the implicit coupling of two
+classes writing to tables that must stay in sync.
 
-This shim will be removed in step 7 once api/deps.py wires services directly.
+The engine accepts an injected `MessageRepository` so the AppContainer
+can share its single SQLiteConnectionFactory; callers that don't have
+one (e.g. ad-hoc scripts) can build the engine from a `db_path` via the
+``from_db_path`` classmethod.
 """
 
 from __future__ import annotations
@@ -19,10 +24,19 @@ __all__ = ["FTSEngine", "SearchResult"]
 
 
 class FTSEngine:
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-        self._factory = SQLiteConnectionFactory(db_path)
-        self._messages = MessageRepository(self._factory)
+    def __init__(self, message_repo: MessageRepository) -> None:
+        self._messages = message_repo
+        self._factory = message_repo._factory
+
+    @classmethod
+    def from_db_path(cls, db_path: str) -> "FTSEngine":
+        """Build an FTSEngine from a SQLite path. Convenient for scripts/tests."""
+        factory = SQLiteConnectionFactory(db_path)
+        return cls(MessageRepository(factory))
+
+    @property
+    def db_path(self) -> str:
+        return self._factory.db_path
 
     def search(
         self,

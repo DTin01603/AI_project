@@ -53,7 +53,7 @@ def test_search_results_ordered_by_descending_score(scenario):
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
         db = TestDb(db_path)
-        fts_engine = FTSEngine(db_path)
+        fts_engine = FTSEngine.from_db_path(db_path)
 
         conversation_id = "test-conv"
         db.create_conversation(conversation_id)
@@ -80,7 +80,7 @@ def test_search_scores_in_valid_range(scenario):
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
         db = TestDb(db_path)
-        fts_engine = FTSEngine(db_path)
+        fts_engine = FTSEngine.from_db_path(db_path)
 
         conversation_id = "test-conv"
         db.create_conversation(conversation_id)
@@ -104,7 +104,7 @@ def test_min_score_filter(scenario, min_score):
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
         db = TestDb(db_path)
-        fts_engine = FTSEngine(db_path)
+        fts_engine = FTSEngine.from_db_path(db_path)
 
         conversation_id = "test-conv"
         db.create_conversation(conversation_id)

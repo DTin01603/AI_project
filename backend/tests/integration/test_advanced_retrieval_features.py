@@ -1,4 +1,4 @@
-"""Integration tests for advanced retrieval features in RetrievalNode."""
+﻿"""Integration tests for advanced retrieval features in RetrievalNode."""
 
 import sys
 from pathlib import Path
@@ -22,7 +22,7 @@ def test_retrieval_node_adds_citations_when_enabled(tmp_path: Path):
     db.save_message(conv, "assistant", "Use OAuth2 and JWT for API security.")
 
     service = RetrievalService(
-        fts_engine=FTSEngine(db_path),
+        fts_engine=FTSEngine.from_db_path(db_path),
         config=RAGConfig(
             default_search_method="hybrid",
             enable_query_expansion=False,
@@ -53,7 +53,7 @@ def test_retrieval_node_compression_when_enabled(tmp_path: Path):
     )
 
     service = RetrievalService(
-        fts_engine=FTSEngine(db_path),
+        fts_engine=FTSEngine.from_db_path(db_path),
         config=RAGConfig(
             default_search_method="hybrid",
             enable_query_expansion=False,

@@ -26,7 +26,7 @@ def _setup_db() -> tuple[str, FTSEngine]:
     db.save_message(conv, "assistant", "oauth2 authentication flow")
     db.save_message(conv, "assistant", "unit testing with pytest")
 
-    return db_path, FTSEngine(db_path)
+    return db_path, FTSEngine.from_db_path(db_path)
 
 
 def test_hybrid_search_returns_ranked_results(tmp_path: Path):

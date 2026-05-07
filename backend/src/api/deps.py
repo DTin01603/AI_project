@@ -108,7 +108,7 @@ class AppContainer:
 
     @cached_property
     def fts_engine(self) -> FTSEngine:
-        return FTSEngine(db_path=self.db_path)
+        return FTSEngine(message_repo=self.message_repo)
 
     @cached_property
     def retrieval_service(self) -> RetrievalService:

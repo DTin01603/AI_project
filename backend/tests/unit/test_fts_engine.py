@@ -35,7 +35,7 @@ def fts_setup(tmp_path: Path):
     """Create a database and FTS engine for testing."""
     db_path = str(tmp_path / "test.db")
     db = TestDb(db_path)
-    fts_engine = FTSEngine(db_path)
+    fts_engine = FTSEngine.from_db_path(db_path)
     
     # Create a test conversation
     conversation_id = "test-conv"
@@ -296,7 +296,7 @@ def test_performance_10k_messages(tmp_path: Path):
     """
     db_path = str(tmp_path / "large_test.db")
     db = TestDb(db_path)
-    fts_engine = FTSEngine(db_path)
+    fts_engine = FTSEngine.from_db_path(db_path)
     
     conversation_id = "large-conv"
     db.create_conversation(conversation_id)

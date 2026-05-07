@@ -1,4 +1,4 @@
-"""Unit tests for RetrievalNode class."""
+﻿"""Unit tests for RetrievalNode class."""
 
 import sys
 import tempfile
@@ -47,7 +47,7 @@ def temp_db():
 @pytest.fixture
 def fts_engine(temp_db):
     """Create FTS engine with test database."""
-    return FTSEngine(temp_db)
+    return FTSEngine.from_db_path(temp_db)
 
 
 @pytest.fixture

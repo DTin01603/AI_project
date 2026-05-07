@@ -63,7 +63,7 @@ def test_document_indexing_and_source_filtering(tmp_path: Path):
     assert len(results) == 2
 
     service = RetrievalService(
-        fts_engine=FTSEngine(db_path),
+        fts_engine=FTSEngine.from_db_path(db_path),
         embedding_model=embedding,
         vector_store=conversation_store,
         document_vector_store=document_store,
