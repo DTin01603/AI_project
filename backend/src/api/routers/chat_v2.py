@@ -11,8 +11,8 @@ from fastapi.responses import StreamingResponse
 
 from api.deps import get_research_agent_graph
 from api.schemas.chat import ChatRequest, ChatResponse, ResponseError, ResponseMeta
-from research_agent.graph import ResearchAgentGraph
-from research_agent.streaming import SSEAdapter
+from agent.graph import ResearchAgentGraph
+from agent.streaming import SSEAdapter
 
 try:
     from langsmith import traceable

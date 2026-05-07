@@ -1,6 +1,6 @@
 from langchain_core.messages import HumanMessage
 
-from research_agent.nodes.persist_conversation_node import persist_conversation_node
+from agent.nodes.persist_conversation_node import persist_conversation_node
 
 
 class _FakeConversationService:

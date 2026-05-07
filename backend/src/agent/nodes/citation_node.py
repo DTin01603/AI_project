@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from research_agent.state import AgentState
-from research_agent.utils import deduplicate_list, get_execution_metadata, node_timing_wrapper
+from agent.state import AgentState
+from agent.utils import deduplicate_list, get_execution_metadata, node_timing_wrapper
 
 
 @node_timing_wrapper("citation")

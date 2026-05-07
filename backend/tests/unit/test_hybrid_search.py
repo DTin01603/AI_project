@@ -12,7 +12,7 @@ from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from rag.hybrid_search import HybridSearchEngine
 from rag.vector_store import ChromaVectorStore
-from research_agent.database import Database
+from agent.database import Database
 
 
 def _setup_db() -> tuple[str, FTSEngine]:

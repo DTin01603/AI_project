@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from research_agent.models import ResearchResult
+from agent.models import ResearchResult
 
 
 class Aggregator:

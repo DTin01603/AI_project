@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from research_agent.state import AgentState
-from research_agent.utils import get_execution_metadata, node_timing_wrapper
+from agent.state import AgentState
+from agent.utils import get_execution_metadata, node_timing_wrapper
 
 
 def _now_iso() -> str:

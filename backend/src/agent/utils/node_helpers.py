@@ -5,7 +5,7 @@ from __future__ import annotations
 from time import perf_counter
 from typing import Any, Callable
 
-from research_agent.state import AgentState
+from agent.state import AgentState
 
 
 class _NodeTimer:

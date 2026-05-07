@@ -4,11 +4,11 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 from rag.retrieval_node import RetrievalNode
-from research_agent.database import Database
-from research_agent.state import AgentState
-from research_agent.utils import get_execution_metadata, update_node_timing
-from research_agent.utils.model_runtime import resolve_and_apply_model
-from research_agent.utils.text import truncate
+from agent.database import Database
+from agent.state import AgentState
+from agent.utils import get_execution_metadata, update_node_timing
+from agent.utils.model_runtime import resolve_and_apply_model
+from agent.utils.text import truncate
 from skills import get_registry
 
 if TYPE_CHECKING:

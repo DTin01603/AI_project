@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
 # Import RAG modules
-from research_agent.database import Database
+from agent.database import Database
 from rag.fts_engine import FTSEngine
 from rag.config import RAGConfig
 from rag.retrieval_node import RetrievalNode

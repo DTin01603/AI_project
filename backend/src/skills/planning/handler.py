@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from research_agent.models import ResearchTask
+from agent.models import ResearchTask
 from skills._base import BaseSkill
 
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)

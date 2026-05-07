@@ -26,10 +26,10 @@ async def get_checkpointer() -> Any:
     backend = langgraph_settings.checkpointer
 
     if backend == "postgres":
-        from research_agent.checkpointer.postgres_checkpointer import get_postgres_checkpointer
+        from agent.checkpointer.postgres_checkpointer import get_postgres_checkpointer
 
         return await get_postgres_checkpointer(langgraph_settings.postgres_connection_string)
 
-    from research_agent.checkpointer.sqlite_checkpointer import get_sqlite_checkpointer
+    from agent.checkpointer.sqlite_checkpointer import get_sqlite_checkpointer
 
     return await get_sqlite_checkpointer(langgraph_settings.db_path)

@@ -14,7 +14,7 @@ from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from rag.metrics import RAGMetrics, reset_metrics
 from rag.retrieval_node import RetrievalNode
-from research_agent.database import Database
+from agent.database import Database
 
 
 @pytest.fixture

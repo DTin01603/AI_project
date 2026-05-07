@@ -1,4 +1,4 @@
-from research_agent.state import AgentState
+from agent.state import AgentState
 
 _VALID_INTENTS = {"direct_answer", "local_rag", "web_search", "current_date"}
 

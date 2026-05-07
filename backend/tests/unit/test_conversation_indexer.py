@@ -5,7 +5,7 @@ from pathlib import Path
 from rag.conversation_indexer import ConversationIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.vector_store import ChromaVectorStore
-from research_agent.database import Database
+from agent.database import Database
 
 
 def test_conversation_indexer_saves_to_sqlite_and_vector_store(tmp_path: Path):

@@ -9,9 +9,9 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 
 from api.schemas.chat import ChatRequest
-from research_agent.config import get_checkpointer
-from research_agent.edges import intent_edge
-from research_agent.nodes import (
+from agent.config import get_checkpointer
+from agent.edges import intent_edge
+from agent.nodes import (
     citation_node,
     current_date_node,
     entry_node,
@@ -22,7 +22,7 @@ from research_agent.nodes import (
     research_node,
     synthesis_node,
 )
-from research_agent.state import AgentState
+from agent.state import AgentState
 
 
 class ResearchAgentGraph:

@@ -10,7 +10,7 @@ sys.path.insert(0, str(src_path))
 from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from rag.retrieval_node import RetrievalNode
-from research_agent.database import Database
+from agent.database import Database
 
 
 def test_retrieval_node_adds_citations_when_enabled(tmp_path: Path):

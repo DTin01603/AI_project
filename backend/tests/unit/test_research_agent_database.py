@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from research_agent.database import Database
+from agent.database import Database
 
 
 def test_create_conversation_and_save_messages(tmp_path: Path) -> None:

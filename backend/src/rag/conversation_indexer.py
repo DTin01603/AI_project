@@ -16,7 +16,7 @@ from rag.embedding import EmbeddingModel
 from rag.vector_store import VectorStore
 from repositories.conversation_repo import ConversationRepository
 from repositories.message_repo import MessageRepository
-from research_agent.database import Database
+from agent.database import Database
 from services.conversation_indexing_service import ConversationIndexingService
 from services.conversation_service import ConversationService
 

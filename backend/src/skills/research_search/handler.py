@@ -7,7 +7,7 @@ from typing import Any, Callable
 import httpx
 from pydantic import BaseModel
 
-from research_agent.models import ResearchResult, SearchResult
+from agent.models import ResearchResult, SearchResult
 from skills._base import BaseSkill
 from skills._errors import SkillValidationError
 from skills._prompt_loader import render

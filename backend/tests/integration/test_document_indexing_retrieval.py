@@ -13,7 +13,7 @@ from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from rag.retrieval_node import RetrievalNode
 from rag.vector_store import ChromaVectorStore
-from research_agent.database import Database
+from agent.database import Database
 
 
 def test_document_indexing_and_source_filtering(tmp_path: Path):

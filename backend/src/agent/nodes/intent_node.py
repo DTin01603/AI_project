@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from research_agent.nodes.common import extract_last_message_content
-from research_agent.state import AgentState
-from research_agent.utils import get_execution_metadata, node_timing_wrapper
+from agent.nodes.common import extract_last_message_content
+from agent.state import AgentState
+from agent.utils import get_execution_metadata, node_timing_wrapper
 from skills import SkillNotFoundError, get_registry
 
 logger = logging.getLogger(__name__)

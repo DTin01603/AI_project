@@ -27,7 +27,7 @@ if "rag.fts_engine" in sys.modules:
     del sys.modules["rag.fts_engine"]
 
 from rag.fts_engine import FTSEngine
-from research_agent.database import Database
+from agent.database import Database
 
 
 @pytest.fixture

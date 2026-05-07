@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from research_agent.state import AgentState
-from research_agent.utils import get_execution_metadata, node_timing_wrapper
+from agent.state import AgentState
+from agent.utils import get_execution_metadata, node_timing_wrapper
 
 
 @node_timing_wrapper("current_date")

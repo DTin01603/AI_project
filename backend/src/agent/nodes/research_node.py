@@ -4,9 +4,9 @@ import asyncio
 from time import perf_counter
 from typing import Any
 
-from research_agent.models import ResearchResult, ResearchTask
-from research_agent.state import AgentState
-from research_agent.utils.model_runtime import resolve_and_apply_model
+from agent.models import ResearchResult, ResearchTask
+from agent.state import AgentState
+from agent.utils.model_runtime import resolve_and_apply_model
 from skills import get_registry
 from skills.research_search.handler import to_research_result
 

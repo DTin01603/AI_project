@@ -10,7 +10,7 @@ from pathlib import Path
 from hypothesis import given, settings, strategies as st
 
 from rag.fts_engine import FTSEngine
-from research_agent.database import Database
+from agent.database import Database
 
 
 @st.composite

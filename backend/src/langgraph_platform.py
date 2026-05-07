@@ -11,7 +11,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from api.deps import _build_orchestrator_dependencies
-from research_agent.graph.research_agent_graph import ResearchAgentGraph
+from agent.graph.research_agent_graph import ResearchAgentGraph
 
 logger = logging.getLogger("langgraph.platform")
 if not logger.handlers:

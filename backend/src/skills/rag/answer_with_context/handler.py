@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from research_agent.utils import deduplicate_list, truncate
+from agent.utils import deduplicate_list, truncate
 from skills._base import BaseSkill
 from skills._errors import SkillValidationError
 from skills._prompt_loader import render

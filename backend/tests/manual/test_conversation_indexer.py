@@ -9,7 +9,7 @@ sys.path.insert(0, 'backend/src')
 from rag.conversation_indexer import ConversationIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.vector_store import ChromaVectorStore
-from research_agent.database import Database
+from agent.database import Database
 
 
 def test_basic():

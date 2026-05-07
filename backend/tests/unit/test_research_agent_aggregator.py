@@ -1,5 +1,5 @@
-from research_agent.aggregator import Aggregator
-from research_agent.models import ResearchResult
+from agent.aggregator import Aggregator
+from agent.models import ResearchResult
 
 
 def test_aggregator_preserves_and_deduplicates_sources() -> None:

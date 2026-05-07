@@ -30,15 +30,15 @@ from repositories.citation_repo import CitationRepository
 from repositories.conversation_repo import ConversationRepository
 from repositories.document_repo import DocumentRepository
 from repositories.message_repo import MessageRepository
-from research_agent.aggregator import Aggregator
-from research_agent.database import Database
+from agent.aggregator import Aggregator
+from agent.database import Database
 from services.citation_service import CitationService
 from services.conversation_indexing_service import ConversationIndexingService
 from services.conversation_service import ConversationService
 
 if TYPE_CHECKING:
     from rag.subgraph import RAGSubgraph
-    from research_agent.graph import ResearchAgentGraph
+    from agent.graph import ResearchAgentGraph
 
 DEFAULT_DB_PATH = "./data/conversations.db"
 _SKILLS_ROOT = Path(__file__).resolve().parent.parent / "skills"
@@ -148,7 +148,7 @@ class AppContainer:
 
     @cached_property
     def research_agent_graph(self) -> "ResearchAgentGraph":
-        from research_agent.graph import ResearchAgentGraph
+        from agent.graph import ResearchAgentGraph
 
         deps = self.graph_dependencies()
         self._ensure_skills_discovered(retrieval_node=deps.retrieval_node)

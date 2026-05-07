@@ -4,7 +4,7 @@ from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 from typing_extensions import Annotated, NotRequired, TypedDict
 
-from research_agent.models import ResearchResult, ResearchTask
+from agent.models import ResearchResult, ResearchTask
 
 
 class AgentState(TypedDict):
