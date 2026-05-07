@@ -1,4 +1,4 @@
-"""Property-based tests for FTS synchronization.
+﻿"""Property-based tests for FTS synchronization.
 
 Feature: rag-tool-implementation, Property 1: FTS Index Synchronization
 **Validates: Requirements 1.2, 1.5**
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from hypothesis import given, settings, strategies as st
 
-from agent.database import Database
+from _helpers import TestDb
 
 
 def escape_fts5_term(term: str) -> str:
@@ -49,7 +49,7 @@ def test_fts_insert_synchronization(message_data_tuple):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
-        temp_db = Database(db_path)
+        temp_db = TestDb(db_path)
 
         message_id = temp_db.save_message(conversation_id, role, content)
 
@@ -95,7 +95,7 @@ def test_fts_delete_synchronization(message_data_tuple):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
-        temp_db = Database(db_path)
+        temp_db = TestDb(db_path)
 
         message_id = temp_db.save_message(conversation_id, role, content)
 
@@ -119,7 +119,7 @@ def test_fts_update_synchronization(message_data_tuple, new_content):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
-        temp_db = Database(db_path)
+        temp_db = TestDb(db_path)
 
         message_id = temp_db.save_message(conversation_id, role, content)
 

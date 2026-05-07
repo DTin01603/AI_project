@@ -10,13 +10,13 @@ sys.path.insert(0, str(src_path))
 from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
-from agent.database import Database
 from services.retrieval_service import RetrievalService
+from _helpers import TestDb
 
 
 def test_retrieval_node_adds_citations_when_enabled(tmp_path: Path):
     db_path = str(tmp_path / "advanced.db")
-    db = Database(db_path)
+    db = TestDb(db_path)
 
     conv = db.create_conversation()
     db.save_message(conv, "assistant", "Use OAuth2 and JWT for API security.")
@@ -42,7 +42,7 @@ def test_retrieval_node_adds_citations_when_enabled(tmp_path: Path):
 
 def test_retrieval_node_compression_when_enabled(tmp_path: Path):
     db_path = str(tmp_path / "compress.db")
-    db = Database(db_path)
+    db = TestDb(db_path)
 
     conv = db.create_conversation()
     db.save_message(

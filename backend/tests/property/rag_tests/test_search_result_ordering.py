@@ -1,4 +1,4 @@
-"""Property-based tests for search result ordering.
+﻿"""Property-based tests for search result ordering.
 
 Feature: rag-tool-implementation, Property 2: Search Result Ordering
 **Validates: Requirements 1.3, 5.3, 7.1**
@@ -10,7 +10,7 @@ from pathlib import Path
 from hypothesis import given, settings, strategies as st
 
 from rag.fts_engine import FTSEngine
-from agent.database import Database
+from _helpers import TestDb
 
 
 @st.composite
@@ -52,7 +52,7 @@ def test_search_results_ordered_by_descending_score(scenario):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
-        db = Database(db_path)
+        db = TestDb(db_path)
         fts_engine = FTSEngine(db_path)
 
         conversation_id = "test-conv"
@@ -79,7 +79,7 @@ def test_search_scores_in_valid_range(scenario):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
-        db = Database(db_path)
+        db = TestDb(db_path)
         fts_engine = FTSEngine(db_path)
 
         conversation_id = "test-conv"
@@ -103,7 +103,7 @@ def test_min_score_filter(scenario, min_score):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
-        db = Database(db_path)
+        db = TestDb(db_path)
         fts_engine = FTSEngine(db_path)
 
         conversation_id = "test-conv"

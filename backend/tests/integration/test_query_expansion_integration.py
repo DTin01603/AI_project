@@ -1,4 +1,4 @@
-"""Integration tests for query expansion through RetrievalNode/HybridSearchEngine."""
+﻿"""Integration tests for query expansion through RetrievalNode/HybridSearchEngine."""
 
 import sys
 from pathlib import Path
@@ -10,13 +10,13 @@ sys.path.insert(0, str(src_path))
 from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
-from agent.database import Database
+from _helpers import TestDb
 from services.retrieval_service import RetrievalService
 
 
 def test_retrieval_node_hybrid_query_expansion_metadata(tmp_path: Path):
     db_path = str(tmp_path / "qe.db")
-    db = Database(db_path)
+    db = TestDb(db_path)
 
     conv = db.create_conversation()
     db.save_message(conv, "assistant", "Use OAuth2 authentication for API security")

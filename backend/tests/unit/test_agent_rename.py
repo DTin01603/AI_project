@@ -11,15 +11,13 @@ from pathlib import Path
 
 
 def test_should_import_agent_module_when_renamed() -> None:
-    """The renamed package + the lightweight Database shim must be importable.
+    """The renamed `agent` package must still be importable.
 
     `agent.graph` is intentionally NOT imported here: it transitively pulls
     optional LLM SDKs (groq, google-genai) which may be missing in the test
-    environment. Importing the package and the Database shim is enough to
-    prove the rename succeeded structurally.
+    environment.
     """
     import agent  # noqa: F401
-    from agent.database import Database  # noqa: F401
 
     assert agent.__name__ == "agent"
 

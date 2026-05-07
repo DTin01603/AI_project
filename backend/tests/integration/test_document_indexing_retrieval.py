@@ -1,4 +1,4 @@
-"""Integration tests for Phase 2c document indexing and multi-source retrieval."""
+﻿"""Integration tests for Phase 2c document indexing and multi-source retrieval."""
 
 import sys
 from pathlib import Path
@@ -13,13 +13,13 @@ from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from rag.vector_store import ChromaVectorStore
-from agent.database import Database
+from _helpers import TestDb
 from services.retrieval_service import RetrievalService
 
 
 def test_document_indexing_and_source_filtering(tmp_path: Path):
     db_path = str(tmp_path / "rag.db")
-    db = Database(db_path)
+    db = TestDb(db_path)
 
     conversation_id = db.create_conversation()
     db.save_message(conversation_id, "user", "How to deploy using docker compose?")

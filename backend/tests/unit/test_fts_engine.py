@@ -1,4 +1,4 @@
-"""Unit tests for FTS Engine.
+﻿"""Unit tests for FTS Engine.
 
 Tests phrase queries, prefix matching, boolean operators, error handling,
 and performance with 10K messages.
@@ -27,14 +27,14 @@ if "rag.fts_engine" in sys.modules:
     del sys.modules["rag.fts_engine"]
 
 from rag.fts_engine import FTSEngine
-from agent.database import Database
+from _helpers import TestDb
 
 
 @pytest.fixture
 def fts_setup(tmp_path: Path):
     """Create a database and FTS engine for testing."""
     db_path = str(tmp_path / "test.db")
-    db = Database(db_path)
+    db = TestDb(db_path)
     fts_engine = FTSEngine(db_path)
     
     # Create a test conversation
@@ -295,7 +295,7 @@ def test_performance_10k_messages(tmp_path: Path):
     **Validates: Requirements 1.3**
     """
     db_path = str(tmp_path / "large_test.db")
-    db = Database(db_path)
+    db = TestDb(db_path)
     fts_engine = FTSEngine(db_path)
     
     conversation_id = "large-conv"
