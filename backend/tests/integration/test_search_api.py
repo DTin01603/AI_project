@@ -81,9 +81,12 @@ def test_client(test_app_with_data, monkeypatch):
     from api.routers import search as search_module
     
     def mock_get_rag_components():
+        from services.retrieval_service import RetrievalService
+
         config = RAGConfig(db_path=db_path)
         fts_engine = FTSEngine(db_path)
-        retrieval_node = RetrievalNode(fts_engine=fts_engine, config=config)
+        service = RetrievalService(fts_engine=fts_engine, config=config)
+        retrieval_node = RetrievalNode(service=service)
         return fts_engine, retrieval_node, config
     
     monkeypatch.setattr(search_module, "get_rag_components", mock_get_rag_components)

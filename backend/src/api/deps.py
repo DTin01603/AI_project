@@ -35,6 +35,7 @@ from agent.database import Database
 from services.citation_service import CitationService
 from services.conversation_indexing_service import ConversationIndexingService
 from services.conversation_service import ConversationService
+from services.retrieval_service import RetrievalService
 
 if TYPE_CHECKING:
     from agent.subgraph import RAGSubgraph
@@ -126,8 +127,18 @@ class AppContainer:
         return FTSEngine(db_path=self.db_path)
 
     @cached_property
+    def retrieval_service(self) -> RetrievalService:
+        return RetrievalService(
+            fts_engine=self.fts_engine,
+            config=self.rag_config,
+            embedding_model=self.embedding_model,
+            vector_store=self.conversation_vector_store,
+            connection_factory=self.factory,
+        )
+
+    @cached_property
     def retrieval_node(self) -> RetrievalNode:
-        return RetrievalNode(fts_engine=self.fts_engine, config=self.rag_config)
+        return RetrievalNode(service=self.retrieval_service)
 
     @cached_property
     def rag_subgraph(self) -> "RAGSubgraph":
@@ -151,7 +162,7 @@ class AppContainer:
         from agent.graph import AgentGraph
 
         deps = self.graph_dependencies()
-        self._ensure_skills_discovered(retrieval_node=deps.retrieval_node)
+        self._ensure_skills_discovered(retrieval_service=self.retrieval_service)
         return AgentGraph(
             dependencies={
                 "database": deps.database,
@@ -164,7 +175,7 @@ class AppContainer:
 
     # ------------------------------------------------------------------ skills
 
-    def _ensure_skills_discovered(self, retrieval_node: RetrievalNode) -> None:
+    def _ensure_skills_discovered(self, retrieval_service: RetrievalService) -> None:
         if self._skills_ready:
             return
         # Lazy import: skills package transitively pulls in optional LLM SDKs
@@ -177,7 +188,7 @@ class AppContainer:
         if registry.has("research_search"):
             registry.get("research_search").tavily_api_key = settings.tavily_api_key
         if registry.has("rag.retrieve"):
-            registry.get("rag.retrieve").retrieval_node = retrieval_node
+            registry.get("rag.retrieve").service = retrieval_service
         self._skills_ready = True
 
 

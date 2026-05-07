@@ -197,12 +197,12 @@ def test_query_expand_empty_input() -> None:
 
 def test_retrieve_returns_empty_when_not_wired() -> None:
     skill = _load_skill("rag.retrieve")
-    # retrieval_node not injected → returns empty safely
+    # retrieval service not injected → returns empty safely
     out = skill.invoke({"query": "X"})
     assert out["documents"] == []
 
 
-def test_retrieve_uses_injected_node() -> None:
+def test_retrieve_uses_injected_service() -> None:
     class _FakeDoc:
         id = "doc1"
         content = "hello"
@@ -210,12 +210,12 @@ def test_retrieve_uses_injected_node() -> None:
         source_type = "document"
         metadata = {"file_path": "/a.md"}
 
-    class _FakeRetrievalNode:
+    class _FakeRetrievalService:
         def retrieve(self, **kwargs):
             return [_FakeDoc()]
 
     skill = _load_skill("rag.retrieve")
-    skill.retrieval_node = _FakeRetrievalNode()
+    skill.service = _FakeRetrievalService()
     out = skill.invoke({"query": "X"})
     assert len(out["documents"]) == 1
     assert out["documents"][0]["id"] == "doc1"

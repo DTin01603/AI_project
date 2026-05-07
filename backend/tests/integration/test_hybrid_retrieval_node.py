@@ -14,6 +14,12 @@ from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from agent.database import Database
+from services.retrieval_service import RetrievalService
+
+
+def _build_node(db_path: str, config: RAGConfig) -> RetrievalNode:
+    service = RetrievalService(fts_engine=FTSEngine(db_path), config=config)
+    return RetrievalNode(service=service)
 
 
 def test_retrieval_node_hybrid_method_end_to_end(tmp_path: Path):
@@ -25,10 +31,7 @@ def test_retrieval_node_hybrid_method_end_to_end(tmp_path: Path):
     db.save_message(conv, "assistant", "Use docker compose in production.")
     db.save_message(conv, "user", "How to secure API with OAuth2?")
 
-    node = RetrievalNode(
-        fts_engine=FTSEngine(db_path),
-        config=RAGConfig(default_search_method="hybrid", default_top_k=3),
-    )
+    node = _build_node(db_path, RAGConfig(default_search_method="hybrid", default_top_k=3))
 
     out = node({"messages": [HumanMessage(content="docker deploy")]})
 
@@ -44,10 +47,7 @@ def test_retrieval_node_vector_method_explicit(tmp_path: Path):
     db.save_message(conv, "user", "JWT authentication for API")
     db.save_message(conv, "assistant", "Use access and refresh tokens")
 
-    node = RetrievalNode(
-        fts_engine=FTSEngine(db_path),
-        config=RAGConfig(default_search_method="vector", default_top_k=3),
-    )
+    node = _build_node(db_path, RAGConfig(default_search_method="vector", default_top_k=3))
 
     docs = node.retrieve(query="JWT tokens", method="vector", top_k=3, min_score=0.0)
 

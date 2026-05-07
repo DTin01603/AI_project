@@ -14,6 +14,7 @@ from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from rag.vector_store import ChromaVectorStore
 from agent.database import Database
+from services.retrieval_service import RetrievalService
 
 
 def test_document_indexing_and_source_filtering(tmp_path: Path):
@@ -56,13 +57,14 @@ def test_document_indexing_and_source_filtering(tmp_path: Path):
     assert len(errors) == 0
     assert len(results) == 2
 
-    node = RetrievalNode(
+    service = RetrievalService(
         fts_engine=FTSEngine(db_path),
         embedding_model=embedding,
         vector_store=conversation_store,
         document_vector_store=document_store,
         config=RAGConfig(default_search_method="hybrid", default_top_k=5, min_relevance_score=0.0),
     )
+    node = RetrievalNode(service=service)
 
     all_sources = node.retrieve(
         query="docker deploy",

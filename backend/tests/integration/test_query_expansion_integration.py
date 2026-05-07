@@ -11,6 +11,7 @@ from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from agent.database import Database
+from services.retrieval_service import RetrievalService
 
 
 def test_retrieval_node_hybrid_query_expansion_metadata(tmp_path: Path):
@@ -20,7 +21,7 @@ def test_retrieval_node_hybrid_query_expansion_metadata(tmp_path: Path):
     conv = db.create_conversation()
     db.save_message(conv, "assistant", "Use OAuth2 authentication for API security")
 
-    node = RetrievalNode(
+    service = RetrievalService(
         fts_engine=FTSEngine(db_path),
         config=RAGConfig(
             default_search_method="hybrid",
@@ -30,9 +31,10 @@ def test_retrieval_node_hybrid_query_expansion_metadata(tmp_path: Path):
             min_relevance_score=0.0,
         ),
     )
+    node = RetrievalNode(service=service)
 
     # Make expansion deterministic for this test.
-    node.query_expander.expand = lambda query, max_alternatives=None: [query, "authentication"]
+    service.query_expander.expand = lambda query, max_alternatives=None: [query, "authentication"]
 
     docs = node.retrieve(query="login", method="hybrid", top_k=5, min_score=0.0)
 

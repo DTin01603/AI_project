@@ -23,7 +23,15 @@ class SearchResult:
 
 @dataclass(frozen=True)
 class RetrievedDocument:
+    """Canonical retrieval result returned by RetrievalService.
+
+    `source_type` distinguishes "conversation" rows (from messages_fts) from
+    "document" / "code_file" chunks (from the indexed_documents collection).
+    Downstream nodes route citations and filtering on this field.
+    """
+
     id: str
     content: str
     score: float
     metadata: dict[str, Any]
+    source_type: str = "conversation"

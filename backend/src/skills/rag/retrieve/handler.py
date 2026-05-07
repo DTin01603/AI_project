@@ -27,19 +27,19 @@ class Handler(BaseSkill):
     Outputs = Outputs
 
     # Injected post-discovery from api/deps.py
-    retrieval_node: Any = None
+    service: Any = None
 
-    def __init__(self, *, retrieval_node: Any = None, **kwargs) -> None:
+    def __init__(self, *, service: Any = None, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.retrieval_node = retrieval_node
+        self.service = service
 
     def run(self, inputs: Inputs) -> dict[str, Any]:
-        if self.retrieval_node is None:
-            logger.warning("rag.retrieve called without retrieval_node injected")
+        if self.service is None:
+            logger.warning("rag.retrieve called without retrieval service injected")
             return {"documents": []}
 
         try:
-            docs = self.retrieval_node.retrieve(
+            docs = self.service.retrieve(
                 query=inputs.query,
                 method=inputs.method or self.config.get("method", "hybrid"),
                 top_k=inputs.top_k or int(self.config.get("top_k", 8)),

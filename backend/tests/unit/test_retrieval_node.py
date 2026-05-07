@@ -15,6 +15,17 @@ from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from agent.database import Database
+from services.retrieval_service import RetrievalService
+
+
+def _build_node(fts_engine, config: RAGConfig) -> RetrievalNode:
+    """Test helper: build a RetrievalNode + its underlying service.
+
+    Mirrors what AppContainer does in production but with explicit construction
+    so individual tests can vary the config.
+    """
+    service = RetrievalService(fts_engine=fts_engine, config=config)
+    return RetrievalNode(service=service)
 
 
 @pytest.fixture
@@ -48,16 +59,16 @@ def retrieval_node(fts_engine):
         default_top_k=5,
         min_relevance_score=0.0,
     )
-    return RetrievalNode(fts_engine=fts_engine, config=config)
+    return _build_node(fts_engine, config)
 
 
 def test_retrieval_node_initialization(fts_engine):
     """Test that RetrievalNode initializes correctly."""
-    node = RetrievalNode(fts_engine=fts_engine)
-    
+    node = _build_node(fts_engine, RAGConfig())
+
     assert node.fts_engine is fts_engine
     assert node.config is not None
-    assert node.vector_search is not None
+    assert node.service is not None
 
 
 def test_retrieval_node_with_custom_config(fts_engine):
@@ -67,8 +78,8 @@ def test_retrieval_node_with_custom_config(fts_engine):
         default_top_k=10,
         min_relevance_score=0.5,
     )
-    node = RetrievalNode(fts_engine=fts_engine, config=config)
-    
+    node = _build_node(fts_engine, config)
+
     assert node.config.default_top_k == 10
     assert node.config.min_relevance_score == 0.5
 
@@ -363,7 +374,7 @@ def test_state_integration_with_high_min_score_returns_empty(retrieval_node):
         default_top_k=5,
         min_relevance_score=0.99,  # Very high threshold
     )
-    node = RetrievalNode(fts_engine=retrieval_node.fts_engine, config=config)
+    node = _build_node(retrieval_node.fts_engine, config)
     
     state = {
         "messages": [HumanMessage(content="deploy")],
