@@ -21,7 +21,6 @@ from config import settings
 from db.connection import SQLiteConnectionFactory
 from db.schema import run_migrations
 from rag.config import RAGConfig, load_config
-from rag.conversation_indexer import ConversationIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
@@ -31,7 +30,6 @@ from repositories.conversation_repo import ConversationRepository
 from repositories.document_repo import DocumentRepository
 from repositories.message_repo import MessageRepository
 from services.research_aggregation_service import ResearchAggregationService
-from agent.database import Database
 from services.citation_service import CitationService
 from services.conversation_indexing_service import ConversationIndexingService
 from services.conversation_service import ConversationService
@@ -47,7 +45,6 @@ _SKILLS_ROOT = Path(__file__).resolve().parent.parent / "skills"
 
 @dataclass
 class GraphDependencies:
-    database: ConversationIndexer
     retrieval_node: RetrievalNode
     rag_subgraph: "RAGSubgraph"
     aggregator: ResearchAggregationService
@@ -109,19 +106,6 @@ class AppContainer:
             chunk_size=self.rag_config.chunk_size,
         )
 
-    # The legacy ConversationIndexer shim still wraps the indexing service so
-    # that LangGraph nodes (llm_node, common.run_llm_node) keep their existing
-    # `Database`-shaped dependency. It will be removed in step 7b.
-    @cached_property
-    def conversation_database_shim(self) -> ConversationIndexer:
-        base_database = Database(db_path=self.db_path)
-        return ConversationIndexer(
-            database=base_database,
-            embedding_model=self.embedding_model,
-            vector_store=self.conversation_vector_store,
-            chunk_size=self.rag_config.chunk_size,
-        )
-
     @cached_property
     def fts_engine(self) -> FTSEngine:
         return FTSEngine(db_path=self.db_path)
@@ -150,7 +134,6 @@ class AppContainer:
 
     def graph_dependencies(self) -> GraphDependencies:
         return GraphDependencies(
-            database=self.conversation_database_shim,
             retrieval_node=self.retrieval_node,
             rag_subgraph=self.rag_subgraph,
             aggregator=ResearchAggregationService(),
@@ -165,7 +148,6 @@ class AppContainer:
         self._ensure_skills_discovered(retrieval_service=self.retrieval_service)
         return AgentGraph(
             dependencies={
-                "database": deps.database,
                 "retrieval_node": deps.retrieval_node,
                 "rag_subgraph": deps.rag_subgraph,
                 "aggregator": deps.aggregator,

@@ -48,7 +48,7 @@ class AgentGraph:
             "local_rag",
             lambda state: llm_node(
                 state,
-                self.dependencies["database"],
+                self.dependencies["conversation_service"],
                 node_name="local_rag",
                 fallback_answer="Xin lỗi, không tìm thấy thông tin phù hợp trong tài liệu.",
                 retrieval_node=self.dependencies.get("retrieval_node"),
@@ -59,7 +59,7 @@ class AgentGraph:
             "direct_answer",
             lambda state: llm_node(
                 state,
-                self.dependencies["database"],
+                self.dependencies["conversation_service"],
                 node_name="direct_answer",
                 fallback_answer="Xin lỗi, mình chưa thể tạo phản hồi lúc này.",
                 retrieval_node=None,

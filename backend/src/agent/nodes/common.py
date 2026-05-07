@@ -4,11 +4,11 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 from agent.nodes.retrieval_node import RetrievalNode
-from agent.database import Database
 from agent.state import AgentState
 from agent.utils import get_execution_metadata, update_node_timing
 from agent.utils.model_runtime import resolve_and_apply_model
 from agent.utils.text import truncate
+from services.conversation_service import ConversationService
 from skills import get_registry
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ def _prepare_document_context(retrieval_node: RetrievalNode, question: str) -> t
 
 def run_llm_node(
     state: AgentState,
-    database: Database,
+    conversation_service: ConversationService,
     retrieval_node: RetrievalNode | None = None,
     *,
     node_name: str,
@@ -69,13 +69,13 @@ def run_llm_node(
     model = resolve_and_apply_model(metadata)
     conversation_id = metadata.get("conversation_id")
     if not conversation_id:
-        conversation_id = database.create_conversation()
+        conversation_id = conversation_service.get_or_create_conversation(None)
         metadata["conversation_id"] = conversation_id
 
     citations = list(state.get("citations") or [])
 
     try:
-        history = database.get_conversation_history(conversation_id)
+        history = conversation_service.get_history(conversation_id)
 
         if rag_subgraph is not None:
             generation, retrieved_citations, retrieval_meta = rag_subgraph.run(
