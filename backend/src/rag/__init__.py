@@ -3,8 +3,6 @@
 from .config import RAGConfig, load_config
 from .chunking import Chunk, ChunkingStrategy, CodeAwareChunking, RecursiveCharacterChunking
 from .contextual_compressor import CompressionResult, ContextualCompressor
-from .citation_tracker import Citation, CitationTracker
-from .document_indexer import DocumentIndexer, IndexingResult
 from .document_loader import (
     DOCXLoader,
     PDFLoader,
@@ -45,10 +43,6 @@ __all__ = [
     "CodeAwareChunking",
     "ContextualCompressor",
     "CompressionResult",
-    "Citation",
-    "CitationTracker",
-    "DocumentIndexer",
-    "IndexingResult",
     "EmbeddingModel",
     "SentenceTransformerEmbedding",
     "OpenAIEmbedding",

@@ -13,8 +13,8 @@ import os
 from typing import Any, Literal
 
 from db.connection import SQLiteConnectionFactory
+from db.schema import run_migrations
 from models.search import RetrievedDocument, SearchResult
-from rag.citation_tracker import CitationTracker
 from rag.config import RAGConfig
 from rag.contextual_compressor import ContextualCompressor
 from rag.embedding import EmbeddingModel, SentenceTransformerEmbedding
@@ -23,6 +23,8 @@ from rag.metrics import RAGMetrics, get_metrics
 from rag.query_expander import QueryExpander
 from rag.reranker import ReRanker
 from rag.vector_store import ChromaVectorStore, VectorStore, build_conversation_collection_name
+from repositories.citation_repo import CitationRepository
+from services.citation_service import CitationService
 from services.hybrid_search_service import HybridSearchEngine
 from services.multi_query_service import MultiQueryRetriever
 
@@ -96,11 +98,18 @@ class RetrievalService:
             if self.config.enable_compression
             else None
         )
-        self.citation_tracker = (
-            CitationTracker(db_path=self.fts_engine.db_path)
-            if self.config.enable_citations
-            else None
-        )
+        # When citations are enabled, build a CitationService over the same
+        # DB. The injected `connection_factory` is preferred so the service
+        # shares the AppContainer's factory; otherwise fall back to a fresh
+        # one pointing at fts_engine's path (matches the legacy shim).
+        if self.config.enable_citations:
+            citation_factory = connection_factory or SQLiteConnectionFactory(self.fts_engine.db_path)
+            run_migrations(citation_factory)
+            self.citation_service: CitationService | None = CitationService(
+                CitationRepository(citation_factory), citation_factory
+            )
+        else:
+            self.citation_service = None
         self.hybrid_search = hybrid_search or HybridSearchEngine(
             fts_engine=self.fts_engine,
             vector_store=self.vector_store,
@@ -172,7 +181,7 @@ class RetrievalService:
             if self.config.enable_compression and self.contextual_compressor is not None and docs:
                 docs = self._compress_documents(traced_query, docs)
 
-            if self.config.enable_citations and self.citation_tracker is not None and docs:
+            if self.config.enable_citations and self.citation_service is not None and docs:
                 docs = self._attach_citations(traced_query, docs)
 
             return docs
@@ -366,13 +375,14 @@ class RetrievalService:
         return compressed_docs
 
     def _attach_citations(self, query: str, docs: list[RetrievedDocument]) -> list[RetrievedDocument]:
+        assert self.citation_service is not None  # guarded by caller
         cited_docs: list[RetrievedDocument] = []
         for doc in docs:
             title = str(doc.metadata.get("title") or doc.metadata.get("file_name") or doc.id)
             author = doc.metadata.get("author")
             created_at = doc.metadata.get("created_at")
 
-            citation = self.citation_tracker.create_citation(
+            citation = self.citation_service.create_citation(
                 document_id=doc.id,
                 chunk_id=str(doc.metadata.get("chunk_id")) if doc.metadata.get("chunk_id") else None,
                 source_type=doc.source_type,
@@ -381,14 +391,14 @@ class RetrievalService:
                 created_at=str(created_at) if created_at else None,
                 metadata=doc.metadata,
             )
-            self.citation_tracker.track_usage(citation.citation_id, query, used_in_response=True)
+            self.citation_service.track_usage(citation.citation_id, query, used_in_response=True)
 
             metadata = {
                 **doc.metadata,
                 "citation_id": citation.citation_id,
-                "citation_apa": self.citation_tracker.format_citation(citation, style="APA"),
-                "citation_mla": self.citation_tracker.format_citation(citation, style="MLA"),
-                "citation_chicago": self.citation_tracker.format_citation(citation, style="Chicago"),
+                "citation_apa": citation.format("APA"),
+                "citation_mla": citation.format("MLA"),
+                "citation_chicago": citation.format("Chicago"),
             }
             cited_docs.append(
                 RetrievedDocument(

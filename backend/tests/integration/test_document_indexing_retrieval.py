@@ -7,13 +7,16 @@ from pathlib import Path
 src_path = Path(__file__).parent.parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
+from db.connection import SQLiteConnectionFactory
+from db.schema import run_migrations
 from rag.config import RAGConfig
-from rag.document_indexer import DocumentIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from rag.vector_store import ChromaVectorStore
 from _helpers import TestDb
+from repositories.document_repo import DocumentRepository
+from services.document_indexing_service import DocumentIndexingService
 from services.retrieval_service import RetrievalService
 
 
@@ -46,8 +49,10 @@ def test_document_indexing_and_source_filtering(tmp_path: Path):
         collection_name="indexed_documents",
     )
 
-    indexer = DocumentIndexer(
-        db_path=db_path,
+    factory = SQLiteConnectionFactory(db_path)
+    run_migrations(factory)
+    indexer = DocumentIndexingService(
+        document_repo=DocumentRepository(factory),
         embedding_model=embedding,
         vector_store=document_store,
         config=RAGConfig(chunk_size=128, chunk_overlap=16, chunking_strategy="recursive"),

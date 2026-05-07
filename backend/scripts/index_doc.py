@@ -53,10 +53,13 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     _bootstrap_import_path()
 
+    from db.connection import SQLiteConnectionFactory
+    from db.schema import run_migrations
     from rag.config import load_config
-    from rag.document_indexer import DocumentIndexer
     from rag.embedding import SentenceTransformerEmbedding
     from rag.vector_store import ChromaVectorStore
+    from repositories.document_repo import DocumentRepository
+    from services.document_indexing_service import DocumentIndexingService
 
     parser = _build_parser()
     args = parser.parse_args()
@@ -76,8 +79,11 @@ def main() -> int:
         collection_name="indexed_documents",
     )
 
-    indexer = DocumentIndexer(
-        db_path=args.db_path,
+    factory = SQLiteConnectionFactory(args.db_path)
+    run_migrations(factory)
+    document_repo = DocumentRepository(factory)
+    indexer = DocumentIndexingService(
+        document_repo=document_repo,
         embedding_model=embedding_model,
         vector_store=vector_store,
         config=config,
