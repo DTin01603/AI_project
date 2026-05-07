@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sqlite3
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -644,10 +643,7 @@ class RetrievalNode:
 
     def _bootstrap_vector_index(self) -> None:
         """Load existing messages into vector store if collection is empty."""
-        db_path = self.fts_engine.db_path
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        try:
+        with self.fts_engine._factory.connect() as conn:
             rows = conn.execute(
                 """
                 SELECT id, content, conversation_id, role, created_at
@@ -655,8 +651,6 @@ class RetrievalNode:
                 ORDER BY created_at ASC
                 """
             ).fetchall()
-        finally:
-            conn.close()
 
         if not rows:
             return

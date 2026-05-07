@@ -4,23 +4,23 @@ from typing import Any
 
 from research_agent.models import ResearchTask
 from research_agent.nodes.common import extract_last_message_content
-from research_agent.planning_agent import PlanningAgent
 from research_agent.state import AgentState
 from research_agent.utils import get_execution_metadata, node_timing_wrapper
-from research_agent.utils.model_runtime import resolve_and_apply_model
+from skills import get_registry
+from skills.planning.handler import to_research_tasks
 
 
 @node_timing_wrapper("planning")
-def planning_node(state: AgentState, planning_agent: PlanningAgent | None = None) -> dict[str, Any]:
-    """Create research plan and record planning metrics."""
+def planning_node(state: AgentState) -> dict[str, Any]:
+    """Create research plan via planning skill."""
     message = extract_last_message_content(state)
-
-    runtime_agent = planning_agent or PlanningAgent()
     fallback_used = False
     metadata = get_execution_metadata(state)
-    resolve_and_apply_model(metadata, runtime_agent, fallback_model=getattr(runtime_agent, "model", None))
+    model_override = metadata.get("model") or None
+
     try:
-        tasks = runtime_agent.create_plan(message)
+        result = get_registry().get("planning").invoke({"question": message}, model_override=model_override)
+        tasks = to_research_tasks(result)
     except Exception:
         tasks = [ResearchTask(order=1, query=message, goal="Thu thập thông tin chính")]
         fallback_used = True

@@ -29,6 +29,7 @@ class RAGSubgraphState(TypedDict):
 
     question: str
     history: list[dict[str, str]]
+    model: str | None
     transformed_query: str
     documents: list[dict[str, Any]]
     relevant_documents: list[dict[str, Any]]

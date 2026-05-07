@@ -1,0 +1,10 @@
+name: rag.retrieve
+version: 1
+description: Hybrid search over document and code-file sources
+llm: false
+
+# Retrieval params (can be overridden per invoke via inputs)
+top_k: 8
+min_score: 0.0
+source_types: [document, code_file]
+method: hybrid

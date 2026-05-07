@@ -1,111 +1,201 @@
+"""Application dependency container.
+
+`AppContainer` is the single composition root. It owns the SQLite connection
+factory, runs migrations once, and lazily wires repositories, services, the
+RAG retrieval stack, and the LangGraph runtime. Routers ask the container for
+a service via the FastAPI `Depends` returned by `get_*_service()`.
+
+The container itself is cached (`@lru_cache`) so the whole app shares one
+factory + one migration run, matching the historic behaviour without changing
+the DI pattern.
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cached_property, lru_cache
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from config import settings
-from rag.config import load_config
+from db.connection import SQLiteConnectionFactory
+from db.schema import run_migrations
+from rag.config import RAGConfig, load_config
 from rag.conversation_indexer import ConversationIndexer
 from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from rag.retrieval_node import RetrievalNode
-from rag.subgraph import RAGSubgraph
 from rag.vector_store import ChromaVectorStore, build_conversation_collection_name
+from repositories.citation_repo import CitationRepository
+from repositories.conversation_repo import ConversationRepository
+from repositories.document_repo import DocumentRepository
+from repositories.message_repo import MessageRepository
 from research_agent.aggregator import Aggregator
-from research_agent.complexity_analyzer import ComplexityAnalyzer
 from research_agent.database import Database
-from research_agent.direct_llm import DirectLLM
-from research_agent.planning_agent import PlanningAgent
-from research_agent.research_tool import ResearchTool
-from research_agent.response_composer import ResponseComposer
-from research_agent.graph import ResearchAgentGraph
+from services.citation_service import CitationService
+from services.conversation_indexing_service import ConversationIndexingService
+from services.conversation_service import ConversationService
+
+if TYPE_CHECKING:
+    from rag.subgraph import RAGSubgraph
+    from research_agent.graph import ResearchAgentGraph
+
+DEFAULT_DB_PATH = "./data/conversations.db"
+_SKILLS_ROOT = Path(__file__).resolve().parent.parent / "skills"
 
 
 @dataclass
 class GraphDependencies:
-    analyzer: ComplexityAnalyzer
-    direct_llm: DirectLLM
-    database: ConversationIndexer  # Changed from Database to ConversationIndexer
+    database: ConversationIndexer
     retrieval_node: RetrievalNode
-    rag_subgraph: RAGSubgraph
-    research_tool: ResearchTool
-    planning_agent: PlanningAgent
+    rag_subgraph: "RAGSubgraph"
     aggregator: Aggregator
-    response_composer: ResponseComposer
+    conversation_service: ConversationService
 
 
-def _build_orchestrator_dependencies() -> GraphDependencies:
-    # Compose concrete dependency graph for orchestrators.
-    rag_config = load_config()
-    
-    # Create base database
-    base_database = Database(db_path="./data/conversations.db")
-    
-    # Create embedding model and vector store for conversations
-    embedding_model = SentenceTransformerEmbedding(
-        model_name=rag_config.embedding_model,
-        dimension=rag_config.embedding_dimension,
-        batch_size=rag_config.batch_size,
-        cache_size=rag_config.cache_size,
-    )
-    
-    conversation_vector_store = ChromaVectorStore(
-        persist_directory=rag_config.vector_store_path,
-        collection_name=build_conversation_collection_name(base_database.db_path),
-    )
-    
-    # Wrap database with ConversationIndexer for realtime embedding
-    database = ConversationIndexer(
-        database=base_database,
-        embedding_model=embedding_model,
-        vector_store=conversation_vector_store,
-        chunk_size=rag_config.chunk_size,
-    )
-    
-    retrieval_node = RetrievalNode(
-        fts_engine=FTSEngine(db_path=base_database.db_path),
-        config=rag_config,
-    )
+class AppContainer:
+    """Single composition root: factory + migrations + repos + services + graph."""
 
-    direct_llm = DirectLLM(model=settings.default_model)
-    rag_subgraph = RAGSubgraph(
-        retrieval_node=retrieval_node,
-        direct_llm=direct_llm,
-    )
+    def __init__(self, db_path: str = DEFAULT_DB_PATH) -> None:
+        self.db_path = db_path
+        self.factory = SQLiteConnectionFactory(db_path)
+        run_migrations(self.factory)
 
-    return GraphDependencies(
-        analyzer=ComplexityAnalyzer(model=settings.default_model),
-        direct_llm=direct_llm,
-        database=database,
-        retrieval_node=retrieval_node,
-        rag_subgraph=rag_subgraph,
-        research_tool=ResearchTool(
-            tavily_api_key=settings.tavily_api_key,
-            llm_api_key=settings.active_llm_api_key(settings.default_model),
-            model=settings.default_model,
-        ),
-        planning_agent=PlanningAgent(model=settings.default_model),
-        aggregator=Aggregator(),
-        response_composer=ResponseComposer(model=settings.default_model),
-    )
+        # Repositories — one per table.
+        self.conversation_repo = ConversationRepository(self.factory)
+        self.message_repo = MessageRepository(self.factory)
+        self.citation_repo = CitationRepository(self.factory)
+        self.document_repo = DocumentRepository(self.factory)
+
+        # Services — orchestrate repos.
+        self.conversation_service = ConversationService(
+            self.conversation_repo, self.message_repo, self.factory
+        )
+        self.citation_service = CitationService(self.citation_repo, self.factory)
+
+        # Lazily-built RAG / agent components below.
+        self._skills_ready = False
+
+    # ------------------------------------------------------------------ RAG
+
+    @cached_property
+    def rag_config(self) -> RAGConfig:
+        return load_config()
+
+    @cached_property
+    def embedding_model(self) -> SentenceTransformerEmbedding:
+        return SentenceTransformerEmbedding(
+            model_name=self.rag_config.embedding_model,
+            dimension=self.rag_config.embedding_dimension,
+            batch_size=self.rag_config.batch_size,
+            cache_size=self.rag_config.cache_size,
+        )
+
+    @cached_property
+    def conversation_vector_store(self) -> ChromaVectorStore:
+        return ChromaVectorStore(
+            persist_directory=self.rag_config.vector_store_path,
+            collection_name=build_conversation_collection_name(self.db_path),
+        )
+
+    @cached_property
+    def conversation_indexing_service(self) -> ConversationIndexingService:
+        return ConversationIndexingService(
+            conversation_service=self.conversation_service,
+            message_repo=self.message_repo,
+            embedding_model=self.embedding_model,
+            vector_store=self.conversation_vector_store,
+            chunk_size=self.rag_config.chunk_size,
+        )
+
+    # The legacy ConversationIndexer shim still wraps the indexing service so
+    # that LangGraph nodes (llm_node, common.run_llm_node) keep their existing
+    # `Database`-shaped dependency. It will be removed in step 7b.
+    @cached_property
+    def conversation_database_shim(self) -> ConversationIndexer:
+        base_database = Database(db_path=self.db_path)
+        return ConversationIndexer(
+            database=base_database,
+            embedding_model=self.embedding_model,
+            vector_store=self.conversation_vector_store,
+            chunk_size=self.rag_config.chunk_size,
+        )
+
+    @cached_property
+    def fts_engine(self) -> FTSEngine:
+        return FTSEngine(db_path=self.db_path)
+
+    @cached_property
+    def retrieval_node(self) -> RetrievalNode:
+        return RetrievalNode(fts_engine=self.fts_engine, config=self.rag_config)
+
+    @cached_property
+    def rag_subgraph(self) -> "RAGSubgraph":
+        from rag.subgraph import RAGSubgraph
+
+        return RAGSubgraph(retrieval_node=self.retrieval_node)
+
+    # ------------------------------------------------------------------ agent
+
+    def graph_dependencies(self) -> GraphDependencies:
+        return GraphDependencies(
+            database=self.conversation_database_shim,
+            retrieval_node=self.retrieval_node,
+            rag_subgraph=self.rag_subgraph,
+            aggregator=Aggregator(),
+            conversation_service=self.conversation_service,
+        )
+
+    @cached_property
+    def research_agent_graph(self) -> "ResearchAgentGraph":
+        from research_agent.graph import ResearchAgentGraph
+
+        deps = self.graph_dependencies()
+        self._ensure_skills_discovered(retrieval_node=deps.retrieval_node)
+        return ResearchAgentGraph(
+            dependencies={
+                "database": deps.database,
+                "retrieval_node": deps.retrieval_node,
+                "rag_subgraph": deps.rag_subgraph,
+                "aggregator": deps.aggregator,
+                "conversation_service": deps.conversation_service,
+            }
+        )
+
+    # ------------------------------------------------------------------ skills
+
+    def _ensure_skills_discovered(self, retrieval_node: RetrievalNode) -> None:
+        if self._skills_ready:
+            return
+        # Lazy import: skills package transitively pulls in optional LLM SDKs
+        # (groq/google-genai). Importing here keeps `api.deps` itself usable
+        # in environments without those deps (e.g. unit tests).
+        from skills import get_registry
+
+        registry = get_registry()
+        registry.discover(_SKILLS_ROOT)
+        if registry.has("research_search"):
+            registry.get("research_search").tavily_api_key = settings.tavily_api_key
+        if registry.has("rag.retrieve"):
+            registry.get("rag.retrieve").retrieval_node = retrieval_node
+        self._skills_ready = True
 
 
 @lru_cache
+def get_container() -> AppContainer:
+    """Process-wide singleton container. Cached so factory + migrations run once."""
+    return AppContainer()
+
+
 def get_research_agent_graph() -> ResearchAgentGraph:
-    # Provide singleton LangGraph v2 graph with shared dependencies.
-    dependencies = _build_orchestrator_dependencies()
-    return ResearchAgentGraph(
-        dependencies={
-            "analyzer": dependencies.analyzer,
-            "direct_llm": dependencies.direct_llm,
-            "database": dependencies.database,
-            "retrieval_node": dependencies.retrieval_node,
-            "rag_subgraph": dependencies.rag_subgraph,
-            "research_tool": dependencies.research_tool,
-            "planning_agent": dependencies.planning_agent,
-            "aggregator": dependencies.aggregator,
-            "response_composer": dependencies.response_composer,
-        }
-    )
+    """Backwards-compat helper — used by chat router and existing imports."""
+    return get_container().research_agent_graph
+
 
 __all__ = [
+    "AppContainer",
+    "DEFAULT_DB_PATH",
+    "GraphDependencies",
+    "get_container",
     "get_research_agent_graph",
 ]

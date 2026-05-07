@@ -1,0 +1,7 @@
+name: planning
+version: 1
+description: Generate a structured multi-step research plan
+# model: null -> falls back to settings.default_model (env DEFAULT_MODEL)
+temperature: 0.1
+max_output_tokens: 700
+llm: true

@@ -1,0 +1,6 @@
+name: rag.transform_query
+version: 1
+description: Rewrite the question for better document retrieval
+temperature: 0.3
+max_output_tokens: 200
+llm: true

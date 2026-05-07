@@ -71,7 +71,12 @@ def test_hybrid_search_deduplicates_results(tmp_path: Path):
 
     ids = [str(r["id"]) for r in rows]
     texts = [str(r["content"]) for r in rows]
-    store.add(ids=ids, embeddings=embedder.embed(texts), texts=texts, metadatas=[{} for _ in ids])
+    store.add(
+        ids=ids,
+        embeddings=embedder.embed(texts),
+        texts=texts,
+        metadatas=[{"source_type": "conversation"} for _ in ids],
+    )
 
     engine = HybridSearchEngine(fts_engine=fts, vector_store=store, embedding_model=embedder)
     results = engine.search("authentication", top_k=10)

@@ -21,3 +21,5 @@ docker==7.1.0
 cryptography==46.0.5
 chromadb==1.5.4
 sentence-transformers==5.2.3
+jinja2>=3.1
+PyYAML>=6.0

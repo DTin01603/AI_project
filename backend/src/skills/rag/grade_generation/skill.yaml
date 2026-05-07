@@ -1,0 +1,6 @@
+name: rag.grade_generation
+version: 1
+description: Verify a generated answer is grounded in context and answers the question
+temperature: 0.0
+max_output_tokens: 200
+llm: true

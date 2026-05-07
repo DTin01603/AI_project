@@ -1,0 +1,10 @@
+name: research_search
+version: 1
+description: Search the web (Tavily) and extract relevant info for a research task
+# model: null -> falls back to settings.default_model (for the extraction LLM call)
+temperature: 0.2
+max_output_tokens: 900
+llm: true
+
+# Runtime tuning
+max_results: 3

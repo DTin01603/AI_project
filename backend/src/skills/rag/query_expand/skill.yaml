@@ -1,0 +1,9 @@
+name: rag.query_expand
+version: 1
+description: Generate alternative query formulations for advanced retrieval
+llm: false
+
+# Expansion params (passed to underlying QueryExpander)
+max_expansions: 3
+timeout_ms: 200
+cache_size: 512

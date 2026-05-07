@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from api.deps import get_research_agent_graph
-from models.request import ChatRequest
-from models.response import ChatResponse, ResponseError, ResponseMeta
+from api.schemas.chat import ChatRequest, ChatResponse, ResponseError, ResponseMeta
 from research_agent.graph import ResearchAgentGraph
 from research_agent.streaming import SSEAdapter
 

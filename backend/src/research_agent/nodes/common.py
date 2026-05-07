@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING, Any
 
 from rag.retrieval_node import RetrievalNode
 from research_agent.database import Database
-from research_agent.direct_llm import DirectLLM
 from research_agent.state import AgentState
 from research_agent.utils import get_execution_metadata, update_node_timing
 from research_agent.utils.model_runtime import resolve_and_apply_model
 from research_agent.utils.text import truncate
+from skills import get_registry
 
 if TYPE_CHECKING:
     from rag.subgraph import RAGSubgraph
@@ -55,7 +55,6 @@ def _prepare_document_context(retrieval_node: RetrievalNode, question: str) -> t
 
 def run_llm_node(
     state: AgentState,
-    direct_llm: DirectLLM,
     database: Database,
     retrieval_node: RetrievalNode | None = None,
     *,
@@ -67,7 +66,7 @@ def run_llm_node(
     question = extract_last_message_content(state)
 
     metadata = get_execution_metadata(state)
-    model = resolve_and_apply_model(metadata, direct_llm, fallback_model=getattr(direct_llm, "model", None))
+    model = resolve_and_apply_model(metadata)
     conversation_id = metadata.get("conversation_id")
     if not conversation_id:
         conversation_id = database.create_conversation()
@@ -80,23 +79,36 @@ def run_llm_node(
 
         if rag_subgraph is not None:
             generation, retrieved_citations, retrieval_meta = rag_subgraph.run(
-                question, history
+                question, history, model=model
             )
             answer = generation or fallback_answer
             provider = "rag_subgraph"
             finish_reason = "stop"
-        else:
+        elif retrieval_node is not None:
             context_prompt, retrieved_citations, retrieval_meta = _prepare_document_context(
-                retrieval_node, question  # type: ignore[arg-type]
+                retrieval_node, question
             )
             augmented_question = question
             if context_prompt:
                 augmented_question = f"{context_prompt}\n\n=== CAU HOI NGUOI DUNG ===\n{question}"
-            answer, provider, finish_reason = direct_llm.generate_response(
-                user_message=augmented_question,
-                history=history,
-                model=model,
+            skill_result = get_registry().get("direct_answer").invoke(
+                {"user_message": augmented_question, "history": history},
+                model_override=model,
             )
+            answer = skill_result["answer"]
+            provider = skill_result["provider"]
+            finish_reason = skill_result["finish_reason"]
+        else:
+            # Pure direct-answer path: no retrieval, no RAG.
+            retrieved_citations = []
+            retrieval_meta = {"document_hits": 0}
+            skill_result = get_registry().get("direct_answer").invoke(
+                {"user_message": question, "history": history},
+                model_override=model,
+            )
+            answer = skill_result["answer"]
+            provider = skill_result["provider"]
+            finish_reason = skill_result["finish_reason"]
 
         for source in retrieved_citations:
             if source not in citations:

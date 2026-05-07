@@ -1,0 +1,30 @@
+name: intent_classifier
+version: 1
+description: >
+  Single-call LLM classifier that routes user query into one of four intents:
+  direct_answer, local_rag, web_search, current_date.
+  Replaces the legacy complexity_classifier + query_router two-step routing.
+# model: null -> falls back to settings.default_model (env DEFAULT_MODEL)
+temperature: 0.0
+max_output_tokens: 200
+llm: true
+
+# Description of what the local document corpus contains.
+# The classifier uses this to decide whether a question is in-corpus
+# (-> local_rag) or out-of-corpus (-> web_search / direct_answer).
+# Edit this when you change the indexed document set.
+corpus_description: |
+  Sách "Lịch sử Việt Nam tập 01: Từ khởi thủy đến thế kỷ X" (Cao Duy Mến, 2013).
+  Phạm vi nội dung:
+    - Thời tiền sử và sơ sử Việt Nam
+    - Văn hóa Đông Sơn, văn hóa Sa Huỳnh, văn hóa Óc Eo
+    - Thời kỳ Hùng Vương, An Dương Vương
+    - Triệu Đà, nước Nam Việt
+    - Thời Bắc thuộc (Hán, Đường, Tùy)
+    - Khởi nghĩa Hai Bà Trưng, Bà Triệu, Lý Bí, Mai Thúc Loan, Phùng Hưng
+    - Họ Khúc, Dương Đình Nghệ, Ngô Quyền và chiến thắng Bạch Đằng (938)
+    - Mọi sự kiện lịch sử Việt Nam từ khởi thủy đến hết thế kỷ X
+  KHÔNG có thông tin về:
+    - Lịch sử Việt Nam sau thế kỷ X (nhà Lý, Trần, Lê, Nguyễn, hiện đại)
+    - Sự kiện thời sự, tin tức, giá cả, thời tiết, lễ hội đương đại
+    - Kiến thức kỹ thuật, công nghệ, lập trình

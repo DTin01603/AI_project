@@ -1,0 +1,7 @@
+name: response_composer
+version: 1
+description: Compose a clear final answer from the aggregated knowledge base
+# model: null -> falls back to settings.default_model (env DEFAULT_MODEL)
+temperature: 0.1
+max_output_tokens: 1200
+llm: true

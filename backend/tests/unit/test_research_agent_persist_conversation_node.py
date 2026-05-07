@@ -3,23 +3,25 @@ from langchain_core.messages import HumanMessage
 from research_agent.nodes.persist_conversation_node import persist_conversation_node
 
 
-class _FakeDatabase:
+class _FakeConversationService:
     def __init__(self) -> None:
-        self.created: list[str] = []
-        self.saved: list[tuple[str, str, str]] = []
+        self.created: list[str | None] = []
+        self.persisted_turns: list[tuple[str, str, str]] = []
 
-    def create_conversation(self, conversation_id: str | None = None) -> str:
+    def get_or_create_conversation(self, conversation_id: str | None) -> str:
         resolved = conversation_id or "conv-generated"
         self.created.append(resolved)
         return resolved
 
-    def save_message(self, conversation_id: str, role: str, content: str) -> str:
-        self.saved.append((conversation_id, role, content))
-        return "msg-id"
+    def persist_turn(
+        self, conversation_id: str, user_message: str, assistant_message: str
+    ) -> tuple[str | None, str | None]:
+        self.persisted_turns.append((conversation_id, user_message, assistant_message))
+        return ("user-id", "assistant-id")
 
 
 def test_persist_conversation_node_saves_user_and_assistant_messages() -> None:
-    database = _FakeDatabase()
+    service = _FakeConversationService()
     state = {
         "messages": [HumanMessage(content="Xin chào")],
         "final_answer": "Chào bạn!",
@@ -29,10 +31,9 @@ def test_persist_conversation_node_saves_user_and_assistant_messages() -> None:
         },
     }
 
-    result = persist_conversation_node(state, database)
+    result = persist_conversation_node(state, service)
 
     assert result["execution_metadata"]["conversation_id"] == "conv-1"
-    assert database.saved == [
-        ("conv-1", "user", "Xin chào"),
-        ("conv-1", "assistant", "Chào bạn!"),
-    ]
+    assert service.persisted_turns == [("conv-1", "Xin chào", "Chào bạn!")]
+    assert result["execution_metadata"]["persistence"]["saved"] is True
+    assert result["execution_metadata"]["persistence"]["error"] is None

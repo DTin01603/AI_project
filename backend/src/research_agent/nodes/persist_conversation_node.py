@@ -2,19 +2,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from research_agent.database import Database
 from research_agent.nodes.common import extract_last_message_content
 from research_agent.state import AgentState
 from research_agent.utils import get_execution_metadata, node_timing_wrapper
+from services.conversation_service import ConversationService
 
 
 @node_timing_wrapper("persist")
-def persist_conversation_node(state: AgentState, database: Database) -> dict[str, Any]:
-    """Persist current user/assistant turn for every execution branch."""
+def persist_conversation_node(
+    state: AgentState, conversation_service: ConversationService
+) -> dict[str, Any]:
+    """Persist current user/assistant turn for every execution branch.
+
+    Both messages are written under one transaction so an error on the
+    assistant insert rolls back the user insert too — no orphan rows.
+    """
     metadata = get_execution_metadata(state)
     conversation_id = str(metadata.get("conversation_id") or "").strip()
     if not conversation_id:
-        conversation_id = database.create_conversation()
+        conversation_id = conversation_service.get_or_create_conversation(None)
         metadata["conversation_id"] = conversation_id
 
     user_message = extract_last_message_content(state).strip()
@@ -23,10 +29,9 @@ def persist_conversation_node(state: AgentState, database: Database) -> dict[str
     persistence_saved = False
     persistence_error: str | None = None
     try:
-        if user_message:
-            database.save_message(conversation_id, "user", user_message)
-        if assistant_answer:
-            database.save_message(conversation_id, "assistant", assistant_answer)
+        conversation_service.persist_turn(
+            conversation_id, user_message, assistant_answer
+        )
         persistence_saved = True
     except Exception as error:
         persistence_error = str(error)

@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from api.deps import get_container
 from api.routers import chat_v2_router, core_router, search_router
 
 
@@ -30,6 +31,8 @@ def configure_logging() -> None:
 def create_app() -> FastAPI:
     # Build FastAPI application and register middleware + exception handlers + routers.
     configure_logging()
+    # AppContainer init runs SQLite migrations once and primes shared singletons.
+    get_container()
     application = FastAPI(title="Simple Agent API", version="0.1.0")
     application.state.started_at = datetime.now(timezone.utc)
     request_logger = logging.getLogger("app.request")

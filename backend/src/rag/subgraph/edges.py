@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-MAX_RETRIES: int = 2
+MAX_RETRIES: int = 8
 """Maximum number of query-transformation retries before forcing generation."""
 
 

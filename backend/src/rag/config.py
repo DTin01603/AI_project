@@ -27,7 +27,7 @@ class RAGConfig(BaseModel):
         description="Embedding model provider"
     )
     embedding_model: str = Field(
-        default="all-MiniLM-L6-v2",
+        default="paraphrase-multilingual-MiniLM-L12-v2",
         description="Embedding model name"
     )
     embedding_dimension: int = Field(
@@ -68,7 +68,7 @@ class RAGConfig(BaseModel):
         description="Default number of results to return"
     )
     min_relevance_score: float = Field(
-        default=0.3,
+        default=0.1,
         ge=0.0,
         le=1.0,
         description="Minimum relevance score threshold"
@@ -91,14 +91,14 @@ class RAGConfig(BaseModel):
     
     # Chunking
     chunk_size: int = Field(
-        default=512,
+        default=800,
         ge=100,
         description="Target chunk size in tokens"
     )
     chunk_overlap: int = Field(
-        default=50,
+        default=300,
         ge=0,
-        description="Overlap between chunks in tokens"
+        description="Overlap between chunks in characters"
     )
     chunking_strategy: Literal["recursive", "semantic", "code-aware"] = Field(
         default="recursive",

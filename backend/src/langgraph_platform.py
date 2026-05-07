@@ -26,13 +26,10 @@ def create_graph() -> Any:
     deps = _build_orchestrator_dependencies()
     runner = ResearchAgentGraph(
         dependencies={
-            "analyzer": deps.analyzer,
-            "direct_llm": deps.direct_llm,
             "database": deps.database,
-            "research_tool": deps.research_tool,
-            "planning_agent": deps.planning_agent,
+            "retrieval_node": deps.retrieval_node,
+            "rag_subgraph": deps.rag_subgraph,
             "aggregator": deps.aggregator,
-            "response_composer": deps.response_composer,
         }
     )
 

@@ -8,12 +8,18 @@ This module provides HTTP endpoints for testing and debugging RAG retrieval:
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Response
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, HTTPException, Response
 
-from rag.config import RAGConfig, load_config
+from api.deps import get_container
+from api.schemas.search import (
+    HealthResponse,
+    SearchRequest,
+    SearchResponse,
+    SearchResultItem,
+)
+from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from rag.retrieval_node import RetrievalNode
 
@@ -23,125 +29,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
-# Pydantic Models
-
-class SearchRequest(BaseModel):
-    """Request model for search endpoint."""
-    
-    query: str = Field(
-        ...,
-        min_length=1,
-        description="Search query text"
-    )
-    method: Literal["fts", "vector", "hybrid"] = Field(
-        default="fts",
-        description="Search method to use"
-    )
-    top_k: int = Field(
-        default=5,
-        ge=1,
-        le=100,
-        description="Maximum number of results to return"
-    )
-    min_score: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Minimum relevance score threshold"
-    )
-    offset: int = Field(
-        default=0,
-        ge=0,
-        description="Offset for pagination"
-    )
-    limit: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="Limit for pagination"
-    )
-    filters: dict[str, Any] | None = Field(
-        default=None,
-        description="Optional metadata filters (conversation_id, date_range)"
-    )
-    
-    @field_validator("query")
-    @classmethod
-    def validate_query_not_empty(cls, v: str) -> str:
-        """Validate that query is not empty or whitespace only."""
-        if not v or not v.strip():
-            raise ValueError("Query cannot be empty or whitespace only")
-        return v
-
-
-class SearchResult(BaseModel):
-    """Individual search result."""
-    
-    id: str = Field(..., description="Document/message ID")
-    content: str = Field(..., description="Document/message content")
-    score: float = Field(..., description="Relevance score (0-1)")
-    source_type: str = Field(..., description="Source type (conversation, document, code)")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-
-
-class SearchResponse(BaseModel):
-    """Response model for search endpoint."""
-    
-    results: list[SearchResult] = Field(
-        default_factory=list,
-        description="List of search results"
-    )
-    total_count: int = Field(
-        ...,
-        description="Total number of results before pagination"
-    )
-    query: str = Field(..., description="Original search query")
-    method: str = Field(..., description="Search method used")
-    execution_time_ms: float = Field(
-        ...,
-        description="Execution time in milliseconds"
-    )
-
-
-class HealthResponse(BaseModel):
-    """Response model for health check endpoint."""
-    
-    status: Literal["ok", "degraded", "error"] = Field(
-        ...,
-        description="Overall health status"
-    )
-    fts_available: bool = Field(
-        ...,
-        description="Whether FTS engine is available"
-    )
-    timestamp: str = Field(
-        ...,
-        description="Timestamp of health check (ISO format)"
-    )
-    details: dict[str, Any] | None = Field(
-        default=None,
-        description="Additional health check details"
-    )
-
-
 # Dependency: Get RAG components
 
 def get_rag_components() -> tuple[FTSEngine, RetrievalNode, RAGConfig]:
-    """Get RAG components for request handling.
-    
-    Returns:
-        Tuple of (FTSEngine, RetrievalNode, RAGConfig)
-    """
-    # Load configuration
-    config = load_config()
-    
-    # Initialize FTS engine
-    fts_engine = FTSEngine(db_path="./data/conversations.db")
-    
-    # Initialize retrieval node
-    retrieval_node = RetrievalNode(fts_engine=fts_engine, config=config)
-    
-    return fts_engine, retrieval_node, config
+    """Resolve shared RAG components from the AppContainer."""
+    container = get_container()
+    return container.fts_engine, container.retrieval_node, container.rag_config
 
 
 # Endpoints
@@ -190,9 +83,9 @@ async def search(request: SearchRequest, response: Response) -> SearchResponse:
         # Apply pagination
         paginated_docs = retrieved_docs[request.offset : request.offset + request.limit]
         
-        # Convert to SearchResult models
+        # Convert to SearchResultItem models
         results = [
-            SearchResult(
+            SearchResultItem(
                 id=doc.id,
                 content=doc.content,
                 score=doc.score,

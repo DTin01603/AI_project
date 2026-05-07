@@ -5,23 +5,29 @@ from time import perf_counter
 from typing import Any
 
 from research_agent.models import ResearchResult, ResearchTask
-from research_agent.research_tool import ResearchTool
 from research_agent.state import AgentState
 from research_agent.utils.model_runtime import resolve_and_apply_model
+from skills import get_registry
+from skills.research_search.handler import to_research_result
 
 
-async def execute_single_task(research_tool: ResearchTool, task: ResearchTask, timeout_seconds: float = 10.0) -> ResearchResult:
-    """Execute one research task with timeout protection."""
-    try:
-        result = await asyncio.wait_for(
-            asyncio.to_thread(
-                research_tool.execute_task,
-                task.order,
-                task.query,
-                task.goal,
-            ),
-            timeout=timeout_seconds,
+async def execute_single_task(
+    task: ResearchTask,
+    timeout_seconds: float = 10.0,
+    model_override: str | None = None,
+) -> ResearchResult:
+    """Execute one research task with timeout protection via the research_search skill."""
+
+    def _run_via_skill() -> ResearchResult:
+        skill = get_registry().get("research_search")
+        out = skill.invoke(
+            {"task_order": task.order, "query": task.query, "goal": task.goal},
+            model_override=model_override,
         )
+        return to_research_result(out)
+
+    try:
+        result = await asyncio.wait_for(asyncio.to_thread(_run_via_skill), timeout=timeout_seconds)
         return result
     except Exception as error:
         return ResearchResult(
@@ -33,24 +39,28 @@ async def execute_single_task(research_tool: ResearchTool, task: ResearchTask, t
         )
 
 
-async def _execute_tasks_parallel(research_tool: ResearchTool, tasks: list[ResearchTask]) -> list[ResearchResult]:
-    coroutines = [execute_single_task(research_tool, task) for task in tasks]
+async def _execute_tasks_parallel(
+    tasks: list[ResearchTask],
+    model_override: str | None,
+) -> list[ResearchResult]:
+    coroutines = [execute_single_task(task, model_override=model_override) for task in tasks]
     results = await asyncio.gather(*coroutines, return_exceptions=False)
     return sorted(results, key=lambda item: item.task_order)
 
 
-async def research_node(state: AgentState, research_tool: ResearchTool) -> dict[str, Any]:
+async def research_node(state: AgentState) -> dict[str, Any]:
     """Run research tasks concurrently and collect ordered results."""
     started = perf_counter()
     metadata = dict(state.get("execution_metadata") or {})
-    resolve_and_apply_model(metadata, research_tool, fallback_model=getattr(research_tool, "model", None))
+    model_override = metadata.get("model") or None
+    resolve_and_apply_model(metadata)
     plan = state.get("research_plan") or []
     if not plan:
         metadata.setdefault("node_timings", {})
         metadata["node_timings"]["research"] = (perf_counter() - started) * 1000
         return {"research_results": [], "execution_metadata": metadata}
 
-    results = await _execute_tasks_parallel(research_tool, plan)
+    results = await _execute_tasks_parallel(plan, model_override)
     success_count = len([result for result in results if result.success])
 
     metadata.setdefault("node_timings", {})

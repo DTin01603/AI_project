@@ -18,14 +18,14 @@ class TestRAGConfig:
 
         assert config.db_path == "data/rag.db"
         assert config.embedding_provider == "sentence-transformers"
-        assert config.embedding_model == "all-MiniLM-L6-v2"
+        assert config.embedding_model == "paraphrase-multilingual-MiniLM-L12-v2"
         assert config.embedding_dimension == 384
         assert config.vector_store_type == "chroma"
         assert config.default_search_method == "hybrid"
         assert config.fts_weight == 0.3
         assert config.vector_weight == 0.7
         assert config.default_top_k == 5
-        assert config.min_relevance_score == 0.3
+        assert config.min_relevance_score == 0.1
 
     def test_custom_config(self):
         """Test creating config with custom values."""

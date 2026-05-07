@@ -1,386 +1,400 @@
-# AI Project - Research Agent với RAG
+# AI Research Agent + RAG
 
-Hệ thống AI Agent thông minh sử dụng FastAPI + LangGraph + React (Vite), tích hợp RAG (Retrieval Augmented Generation) để trả lời câu hỏi dựa trên kiến thức từ hội thoại và tài liệu đã index.
+Hệ thống chat AI kết hợp **FastAPI + LangGraph + React (Vite)** với **RAG** trên tài liệu lịch sử Việt Nam. Một LLM call phân loại intent → định tuyến sang `direct_answer`, `local_rag`, `web_search`, hoặc `current_date` → tổng hợp câu trả lời có trích dẫn.
 
-## Tính năng chính
+---
 
-### Chat & Streaming
-- Chat thường (JSON response)
-- Chat streaming realtime qua SSE (Server-Sent Events)
-- Routing thông minh theo loại câu hỏi (simple/research/current_date/direct_llm)
-- Persist hội thoại bằng SQLite + LangGraph checkpointer
+## Mục lục
 
-### RAG System (Retrieval Augmented Generation)
-- **Hybrid Search**: Kết hợp FTS (Full-Text Search) và Vector Search
-- **Cross-Encoder Re-ranking**: Cải thiện độ chính xác 10-20%
-- **Realtime Conversation Indexing**: Tự động index mọi tin nhắn mới
-- **Document Indexing**: Index tài liệu (txt, md, pdf, docx) và code files
-- **Query Expansion**: Mở rộng câu hỏi để tìm kiếm tốt hơn
-- **Citation Tracking**: Theo dõi nguồn trích dẫn trong câu trả lời
+1. [Kiến trúc](#1-kiến-trúc)
+2. [Cấu trúc thư mục](#2-cấu-trúc-thư-mục)
+3. [Chạy project](#3-chạy-project)
+4. [Cấu hình](#4-cấu-hình)
+5. [API](#5-api)
+6. [RAG](#6-rag)
+7. [Kiểm thử](#7-kiểm-thử)
+8. [Deploy](#8-deploy)
+9. [Troubleshooting](#9-troubleshooting)
 
-Xem chi tiết tại [RAG_SYSTEM_OVERVIEW.md](RAG_SYSTEM_OVERVIEW.md)
+---
 
-## 1) Chuẩn bị môi trường
+## 1. Kiến trúc
 
-### Tạo file env local
+### Stack
+
+| Tầng | Công nghệ |
+|------|-----------|
+| Backend | FastAPI 0.135, Python 3.12, Uvicorn |
+| Orchestration | LangGraph 1.0, LangChain 1.2 |
+| LLM | Google Gemini (mặc định), Groq |
+| Search | Google Custom Search, Tavily |
+| RAG | ChromaDB (vector) + SQLite FTS5, sentence-transformers, cross-encoder rerank |
+| Persistence | SQLite checkpointer (mặc định) hoặc Postgres |
+| Frontend | React 19, Vite 7 |
+
+### Luồng request
+
+```
+Client ──POST /api/v2/chat──► FastAPI ──► ResearchAgentGraph
+                                              │
+                                              ▼
+                                          entry → intent
+                                                    │
+                          ┌──────────────┬──────────┼──────────────┐
+                          ▼              ▼          ▼              ▼
+                   direct_answer    local_rag   web_search     current_date
+                                                    │
+                                          planning → research → synthesis → citation
+                          │              │          │              │
+                          └──────────────┴────► persist ────► END
+                                              │
+                                              ▼
+                            SSE events (stream) hoặc ChatResponse (JSON)
+```
+
+**Routing 1 bước:** node `intent` gọi skill `intent_classifier` (1 LLM call) chọn 1 trong 4 nhánh dựa trên mô tả corpus trong [skill.yaml](backend/src/skills/intent_classifier/skill.yaml). Đây là kiến trúc hiện tại, đã thay thế luồng cũ `complexity → router` 2 bước.
+
+### Skill Framework
+
+Mọi prompt + logic LLM được đóng gói thành **skill** — folder 3 file:
+
+```
+backend/src/skills/<name>/
+├── skill.yaml     # metadata, model, runtime params
+├── prompt.md      # Jinja2 template
+└── handler.py     # Handler(BaseSkill) với Inputs/Outputs Pydantic
+```
+
+- `SkillRegistry` discover khi startup; folder `rag/transform_query/` → skill `rag.transform_query`.
+- Prompt **auto-reload theo mtime** — sửa `prompt.md` không cần restart.
+- Model resolution: `request.model` → `skill.yaml` → `DEFAULT_MODEL` env.
+
+**11 skills hiện có:**
+
+| Skill | LLM | Mục đích |
+|-------|-----|----------|
+| `intent_classifier` | ✓ | Routing 1-step (direct_answer / local_rag / web_search / current_date) |
+| `planning` | ✓ | Sinh research plan (cap 5 task) |
+| `research_search` | ✓ | Tavily search + LLM extraction |
+| `direct_answer` | ✓ | LLM trực tiếp với history trimming + retry/timeout |
+| `response_composer` | ✓ | Tổng hợp answer từ knowledge base |
+| `rag.retrieve` | ✗ | Wrap `RetrievalNode` (hybrid BM25 + vector) |
+| `rag.query_expand` | ✗ | Sinh biến thể query cho multi-query retrieval |
+| `rag.transform_query` | ✓ | Rewrite query khi retrieval fail |
+| `rag.grade_documents` | ✓ | Đánh giá relevance, fallback threshold 0.4 |
+| `rag.grade_generation` | ✓ | Verify answer grounded & useful |
+| `rag.answer_with_context` | ✓ | Sinh answer từ context docs + history |
+
+**Thêm skill mới:** tạo folder mới với 3 file, registry tự discover khi restart.
+
+### Persistence
+
+| Data | Path mặc định | Env |
+|------|--------------|-----|
+| Message history | `./data/conversations.db` | `DATABASE_PATH` |
+| Graph checkpoints | `./checkpoints.db` | `LANGGRAPH_DB_PATH` |
+| RAG FTS5 | `data/rag.db` | `RAG_DB_PATH` |
+| Vector store | `data/vector_store/` | `RAG_VECTOR_STORE_PATH` |
+
+Sơ đồ chi tiết: [docs/architecture/](docs/architecture/).
+
+---
+
+## 2. Cấu trúc thư mục
+
+```
+AI_project/
+├── backend/src/
+│   ├── main.py                    # FastAPI app entry
+│   ├── config.py                  # Settings + model registry
+│   ├── langgraph_platform.py      # Entry cho LangGraph Platform
+│   ├── api/
+│   │   ├── deps.py                # DI: build ResearchAgentGraph
+│   │   └── routers/               # core, chat_v2, search
+│   ├── adapters/                  # LLM adapters (google, groq)
+│   ├── models/                    # Request/Response/Internal DTOs
+│   ├── skills/                    # 11 skills (xem bảng trên)
+│   ├── research_agent/
+│   │   ├── graph/                 # LangGraph build + compile
+│   │   ├── nodes/                 # 9 thin-wrapper nodes (delegate sang skills)
+│   │   ├── edges/                 # intent_edge
+│   │   ├── streaming/sse_adapter  # graph updates → SSE events
+│   │   ├── checkpointer/          # sqlite / postgres
+│   │   ├── aggregator.py          # Gộp research results (no LLM)
+│   │   ├── database.py            # conversations.db CRUD
+│   │   └── state.py               # AgentState TypedDict
+│   └── rag/                       # FTS5 + Chroma + reranker + chunking
+│
+├── backend/config/rag.yaml.example
+├── backend/scripts/index_doc.py   # CLI index tài liệu
+├── backend/tests/                 # unit / integration / property / manual
+│
+├── frontend/src/                  # React 19 + Vite 7
+├── scripts/                       # docker-up-clean, clear_index, debug_chunks, langsmith_evaluate
+├── docs/
+│   ├── architecture/              # diagrams/ + workflows/ + plans/
+│   ├── guides/                    # AI agent guide, beginner guide, criteria
+│   ├── changelog/
+│   └── archive/                   # Plan/report cũ đã xong
+├── data/                          # Runtime DB + vector store + sources/
+│
+├── docker-compose.yml
+├── Dockerfile.backend / Dockerfile.frontend
+├── requirements.txt
+├── langgraph.json                 # Manifest LangGraph Platform
+└── .env.example
+```
+
+---
+
+## 3. Chạy project
+
+### Yêu cầu
+
+- **Docker Desktop** (khuyến nghị), hoặc Python 3.12+ và Node.js 20+.
+
+### Setup
 
 ```bash
 cp .env.example .env
+# Điền GEMINI_API_KEY (hoặc GROQ_API_KEY) tối thiểu
 ```
 
-### Các biến môi trường quan trọng
-
-#### LLM & Search APIs
-- `GEMINI_API_KEY` hoặc `GOOGLE_API_KEY` - API key cho Google Gemini
-- `GROQ_API_KEY` - API key cho Groq (optional)
-- `GOOGLE_SEARCH_API_KEY` - API key cho Google Search
-- `GOOGLE_SEARCH_ENGINE_ID` - Search Engine ID
-- `DEFAULT_MODEL` - Model mặc định (vd: `gemini/gemini-2.5-flash`)
-
-#### Database & Persistence
-- `LANGGRAPH_CHECKPOINTER` - Loại checkpointer (`sqlite` hoặc `postgres`)
-- `LANGGRAPH_DB_PATH` - Đường dẫn database cho checkpoints (mặc định `./checkpoints.db`)
-- `DATABASE_PATH` - Đường dẫn database cho conversations (mặc định `./data/conversations.db`)
-
-#### RAG Configuration (Optional)
-- `RAG_DB_PATH` - Database cho RAG (mặc định `data/rag.db`)
-- `RAG_VECTOR_STORE_PATH` - Thư mục lưu vector store (mặc định `data/vector_store`)
-- `RAG_DEFAULT_SEARCH_METHOD` - Phương thức search (`fts`, `vector`, hoặc `hybrid`)
-- `RAG_ENABLE_RERANKING` - Bật/tắt cross-encoder re-ranking (mặc định `true`)
-- `RAG_RERANKER_MODEL` - Model re-ranker (mặc định `cross-encoder/ms-marco-MiniLM-L-6-v2`)
-- `RAG_ENABLE_QUERY_EXPANSION` - Bật/tắt query expansion (mặc định `true`)
-
-Xem file `backend/config/rag.yaml.example` để biết đầy đủ các tùy chọn cấu hình RAG.
-
-### Lưu ý bảo mật
-
-- Không commit `.env` vào git
-- Nếu key từng bị lộ, rotate key ngay lập tức
-- Sử dụng `.env.example` làm template
-
-## 2) Chạy project
-
-### Cách khuyến nghị: Docker Compose
+### Docker (khuyến nghị)
 
 ```bash
 docker compose up --build
 ```
 
-Nếu cần dọn process/container cũ trước khi chạy:
+- Backend: http://localhost:8000
+- Frontend: http://localhost:5173
+- Volumes: `./data` (DB) + `hf_cache` (HuggingFace models)
 
-```bash
-./scripts/docker-up-clean.sh
-```
+### Local
 
-Services:
-
-- Backend: `http://localhost:8000`
-- Frontend: `http://localhost:5173`
-
-### Chạy backend local (không Docker)
-
+**Backend:**
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Linux/macOS
+# .venv\Scripts\activate           # Windows
 pip install -r requirements.txt
 PYTHONPATH=backend/src uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## 3) API hiện tại
+**Frontend:**
+```bash
+cd frontend && npm install && npm run dev
+```
 
-### Chat endpoint chính
+---
 
-- `POST /api/v2/chat`
-- Header response: `x-api-version: 2`
+## 4. Cấu hình
 
-Query param:
+### LLM & Search keys
 
-- `stream=false` (mặc định): trả JSON `ChatResponse`
-- `stream=true`: trả `text/event-stream` (SSE)
+| Biến | Bắt buộc | Mô tả |
+|------|----------|-------|
+| `GEMINI_API_KEY` (hoặc `GOOGLE_API_KEY`) | ✓ (hoặc Groq) | Google Gemini |
+| `GROQ_API_KEY` | ✓ (hoặc Gemini) | Groq |
+| `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_ENGINE_ID` | research | Google Custom Search |
+| `TAVILY_API_KEY` | research | Tavily (alternative) |
+| `DEFAULT_MODEL` | tuỳ chọn | vd `gemini/gemini-2.5-flash` |
 
-Request body:
+### Persistence & runtime
 
+| Biến | Mặc định |
+|------|----------|
+| `LANGGRAPH_CHECKPOINTER` | `sqlite` (hoặc `postgres`) |
+| `LANGGRAPH_DB_PATH` | `./checkpoints.db` |
+| `DATABASE_PATH` | `./data/conversations.db` |
+| `LOG_LEVEL` | `INFO` |
+| `DEFAULT_MAX_OUTPUT_TOKENS` | `1200` |
+
+### RAG
+
+| Biến | Mặc định |
+|------|----------|
+| `RAG_DEFAULT_SEARCH_METHOD` | `hybrid` (`fts` / `vector` / `hybrid`) |
+| `RAG_FTS_WEIGHT` / `RAG_VECTOR_WEIGHT` | `0.3` / `0.7` |
+| `RAG_ENABLE_RERANKING` | `true` |
+| `RAG_RERANKER_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` | `512` / `50` |
+
+Cấu hình đầy đủ: [.env.example](.env.example) và [backend/config/rag.yaml.example](backend/config/rag.yaml.example).
+
+> **Bảo mật:** không commit `.env`. Rotate key ngay nếu lộ.
+
+---
+
+## 5. API
+
+Base URL: `http://localhost:8000`. Response luôn có header `x-api-version: 2`.
+
+### `POST /api/v2/chat`
+
+Query: `?stream=true` để SSE.
+
+**Request:**
 ```json
 {
-	"message": "Giá vàng hôm nay bao nhiêu?",
-	"conversation_id": "optional-id",
-	"locale": "vi-VN",
-	"channel": "web",
-	"model": "gemini/gemini-2.5-flash"
+  "message": "Ngô Quyền đánh bại quân Nam Hán năm nào?",
+  "conversation_id": "optional-uuid",
+  "model": "gemini/gemini-2.5-flash"
 }
 ```
 
-### Health/Readiness/Models
+**Response (non-stream):**
+```json
+{
+  "request_id": "uuid",
+  "conversation_id": "uuid",
+  "status": "ok",
+  "answer": "...",
+  "sources": ["..."],
+  "meta": { "provider": "gemini", "model": "...", "finish_reason": "stop" }
+}
+```
 
-- `GET /health`
-- `GET /ready`
-- `GET /models`
+**Response (stream, SSE):**
+```
+data: {"type":"status","node":"intent","progress":15,...}
+data: {"type":"status","node":"local_rag","progress":50,...}
+data: {"type":"done","data":{"answer":"...","citations":[...]}}
+data: [DONE]
+```
 
-### Versioning & error policy
+Stream tự retry 1 lần khi gặp `MODEL_ERROR` (rate-limit/timeout).
 
-- Contract chi tiết được chốt tại `API_CONTRACT.md`
-- Breaking change phải tạo version mới (`/api/v3/...`), không break trực tiếp v2
-- JSON errors chuẩn dùng các code: `BAD_REQUEST`, `INTERNAL_ERROR`, `MODEL_ERROR`, `EXECUTION_ERROR`
+**Error codes:** `BAD_REQUEST`, `MODEL_ERROR`, `EXECUTION_ERROR`, `INTERNAL_ERROR`.
 
-## 4) Ví dụ gọi API
+### Endpoints khác
 
-### Non-stream
+| Method | Path | Mô tả |
+|--------|------|-------|
+| `GET` | `/health` | Liveness + uptime |
+| `GET` | `/ready` | Readiness (503 nếu không có provider) |
+| `GET` | `/models` | Danh sách model + availability |
+| `POST` | `/api/search` | Debug RAG (`fts` / `vector` / `hybrid`) |
+| `GET` | `/api/search/health` | FTS engine health |
+
+### Ví dụ
 
 ```bash
+# Non-stream
 curl -X POST 'http://localhost:8000/api/v2/chat' \
-	-H 'Content-Type: application/json' \
-	-d '{
-		"message":"Tóm tắt tình hình AI 2026",
-		"model":"gemini/gemini-2.5-flash"
-	}'
-```
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Khởi nghĩa Hai Bà Trưng năm nào?"}'
 
-### Streaming SSE
-
-```bash
+# Stream
 curl -N -X POST 'http://localhost:8000/api/v2/chat?stream=true' \
-	-H 'Content-Type: application/json' \
-	-d '{
-		"message":"Tìm 3 quán phở ngon ở Hà Nội",
-		"model":"gemini/gemini-2.5-flash"
-	}'
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Tóm tắt văn hóa Đông Sơn"}'
 ```
 
-SSE stream sẽ phát:
+Frontend: xem [frontend/src/services/api.js](frontend/src/services/api.js).
 
-- nhiều event `status` (progress theo node)
-- 1 event `done` (answer/citations/metadata)
-- kết thúc bằng `data: [DONE]`
+---
 
-## 5) Kiểm thử
+## 6. RAG
 
-### Chạy toàn bộ test suite
+### Pipeline
 
-```bash
-pytest -q
-```
+**Indexing:** `document_loader` (txt/md/pdf/docx/code) → `chunking` → `embedding` → SQLite FTS5 + ChromaDB.
 
-### Chạy test theo module
+**Retrieval:** Query → (Query Expansion) → FTS + Vector → Hybrid Merge → Cross-Encoder Rerank → Top-K.
 
-```bash
-# Test RAG system
-pytest backend/tests/integration/test_retrieval_with_metrics.py -v
-pytest backend/tests/integration/test_hybrid_retrieval_node.py -v
-pytest backend/tests/integration/test_document_indexing_retrieval.py -v
-
-# Test API endpoints
-pytest backend/tests/integration/test_deliver_response_api.py -v
-pytest backend/tests/integration/test_streaming_chat_api.py -v
-
-# Test unit
-pytest backend/tests/unit/ -v
-```
-
-### Test thủ công
-
-```bash
-# Test conversation indexing và retrieval
-python test_manual.py
-
-# Index một document
-python backend/scripts/index_doc.py path/to/document.md
-```
-
-## 6) Cấu trúc thư mục chính
-
-### Backend
-- `backend/src/research_agent/`: LangGraph runtime (graph, nodes, edges, streaming, checkpointer)
-- `backend/src/api/routers/chat_v2.py`: API chat v2 (stream + non-stream)
-- `backend/src/rag/`: Hệ thống RAG hoàn chỉnh
-  - `fts_engine.py`: Full-text search với SQLite FTS5
-  - `vector_store.py`: Vector search với ChromaDB
-  - `hybrid_search.py`: Kết hợp FTS + Vector search
-  - `reranker.py`: Cross-encoder re-ranking
-  - `embedding.py`: Embedding models (sentence-transformers)
-  - `document_indexer.py`: Index tài liệu và code
-  - `conversation_indexer.py`: Realtime conversation indexing
-  - `retrieval_node.py`: LangGraph node cho retrieval
-  - `query_expander.py`: Mở rộng câu hỏi
-  - `chunking.py`: Chiến lược chunking (recursive, code-aware)
-- `backend/src/adapters/`: Adapter cho các LLM providers
-- `backend/src/models/`: Request/Response schemas
-- `backend/config/`: Configuration files (rag.yaml.example)
-- `backend/data/`: Databases và vector stores
-- `backend/scripts/`: Utility scripts (index_doc.py)
-
-### Frontend
-- `frontend/`: React Vite app với SSE streaming support
-
-### Documentation
-- `Architecture/`: Tài liệu thiết kế, migration plan, flow diagrams
-- `docs/`: Tài liệu chi tiết về các tính năng
-- `API_CONTRACT.md`: API contract và versioning policy
-- `PROJECT_FUNCTION_MAP.md`: Map chi tiết các file và chức năng
-- `UPGRADE_CROSS_ENCODER.md`: Hướng dẫn nâng cấp cross-encoder
-- `complete-ai-agent-guide.md`: Hướng dẫn xây dựng AI Agent hoàn chỉnh
-
-## 7) Ghi chú kiến trúc
-
-### Streaming Architecture
-- Stream mode dùng `graph.astream(..., stream_mode="updates")`
-- `SSEAdapter` chuyển từng node update thành SSE event để frontend render realtime
-
-### Persistence Layers
-- **Message history**: `DATABASE_PATH` (SQLite)
-- **Graph checkpoints**: `LANGGRAPH_DB_PATH` (SQLite) hoặc Postgres
-- **RAG database**: `RAG_DB_PATH` (SQLite với FTS5)
-- **Vector store**: `RAG_VECTOR_STORE_PATH` (ChromaDB)
-
-### RAG Pipeline
-1. **Indexing Flow**: Document/Message → Chunking → Embedding → [SQLite FTS + Vector Store]
-2. **Retrieval Flow**: Query → Query Expansion → [FTS Search + Vector Search] → Hybrid Merge → Re-ranking → Top Results
-3. **Realtime Indexing**: Mọi tin nhắn mới tự động được index vào cả FTS và Vector store
-
-### Search Methods
-- **FTS (Full-Text Search)**: Keyword-based search với SQLite FTS5, tốt cho exact matches
-- **Vector Search**: Semantic search với embeddings, tốt cho ý nghĩa tương tự
-- **Hybrid Search**: Kết hợp cả hai với weighted scoring (mặc định: FTS 30%, Vector 70%)
-- **Re-ranking**: Cross-encoder đánh giá lại top candidates để cải thiện độ chính xác
-
-## 8) Deploy lên LangGraph Platform (Server logs view)
-
-Project đã có sẵn manifest deploy `langgraph.json` và graph entrypoint `backend/src/langgraph_platform.py`.
-
-### Chuẩn bị
-
-1. Đảm bảo `.env` có đầy đủ key model/search bạn dùng (`GEMINI_API_KEY` hoặc `GROQ_API_KEY`, `TAVILY_API_KEY` nếu cần).
-2. Cài CLI:
-
-```bash
-pip install -U langgraph-cli
-```
-
-### Chạy local bằng LangGraph runtime
-
-```bash
-langgraph dev
-```
-
-Khi runtime chạy, mở Studio/UI và chọn graph `research-agent`.
-
-### Deploy lên LangGraph Platform
-
-```bash
-langgraph up
-```
-
-Sau khi deploy thành công, vào Studio của deployment đó:
-
-1. Chạy thử graph 1 lần (invoke hoặc stream).
-2. Mở `Server logs view` để xem:
-   - Agent server operational logs.
-   - User application logs từ Python `logging` trong code.
-
-### Ghi log để hiện trong Server logs view
-
-Bạn có thể ghi log ở bất kỳ node/module nào:
-
-```python
-import logging
-
-logger = logging.getLogger("app.research")
-logger.info("Start research node", extra={"query": "gia vang hom nay"})
-```
-
-`backend/src/langgraph_platform.py` đã cấu hình logging cơ bản để log text xuất hiện trong server logs.
-
-
-## 9) RAG System - Hướng dẫn sử dụng
-
-### Cài đặt Cross-Encoder (Khuyến nghị)
-
-Cross-encoder cải thiện độ chính xác tìm kiếm 10-20%. Xem chi tiết tại [UPGRADE_CROSS_ENCODER.md](UPGRADE_CROSS_ENCODER.md).
-
-**Cài đặt nhanh:**
-```bash
-cd backend
-pip install sentence-transformers
-```
-
-Hệ thống sẽ tự động fallback về cosine similarity nếu không có `sentence-transformers`.
+**Realtime:** Mỗi message user/assistant được `conversation_indexer` index ngay khi persist.
 
 ### Index tài liệu
 
 ```bash
-# Index một file
-python backend/scripts/index_doc.py docs/setup_guide.md
-
-# Index thư mục
-python backend/scripts/index_doc.py docs/
+python backend/scripts/index_doc.py docs/setup_guide.md   # 1 file
+python backend/scripts/index_doc.py docs/                  # cả thư mục
 ```
 
-### Cấu hình RAG
+### Chọn search method
 
-Tạo file `backend/config/rag.yaml` từ template:
+| Method | Khi nào dùng |
+|--------|--------------|
+| `fts` | Keyword exact, tên riêng, code |
+| `vector` | Semantic / diễn đạt khác nhau |
+| `hybrid` | Mặc định, recommended |
+
+### Cross-encoder
+
+Tăng độ chính xác 10-20%. `sentence-transformers` đã có trong `requirements.txt`. Cài tay:
 
 ```bash
-cp backend/config/rag.yaml.example backend/config/rag.yaml
+backend/install_cross_encoder.bat   # Windows
+bash backend/install_cross_encoder.sh   # Linux/macOS
 ```
 
-Hoặc dùng environment variables với prefix `RAG_`:
+Fallback về cosine similarity nếu không load được.
+
+Chi tiết: [backend/src/rag/README.md](backend/src/rag/README.md).
+
+---
+
+## 7. Kiểm thử
 
 ```bash
-RAG_DEFAULT_SEARCH_METHOD=hybrid
-RAG_ENABLE_RERANKING=true
-RAG_FTS_WEIGHT=0.3
-RAG_VECTOR_WEIGHT=0.7
+pytest -q                                              # Toàn bộ
+pytest backend/tests/unit/ -v                          # Unit
+pytest backend/tests/integration/ -v                   # Integration
+pytest backend/tests/unit/test_skills_framework.py -v  # Skill framework
+pytest backend/tests/integration/test_chat_v2_streaming.py -v  # Chat API
 ```
 
-### Search Methods
+Trạng thái: 175 unit tests PASS (~9 phút).
 
-- **FTS**: Tốt cho exact keyword matches
-  ```bash
-  RAG_DEFAULT_SEARCH_METHOD=fts
-  ```
-
-- **Vector**: Tốt cho semantic similarity
-  ```bash
-  RAG_DEFAULT_SEARCH_METHOD=vector
-  ```
-
-- **Hybrid** (Khuyến nghị): Kết hợp cả hai
-  ```bash
-  RAG_DEFAULT_SEARCH_METHOD=hybrid
-  RAG_FTS_WEIGHT=0.3
-  RAG_VECTOR_WEIGHT=0.7
-  ```
-
-### Tối ưu hóa Performance
-
-**Nếu latency cao:**
+**Test thủ công:**
 ```bash
-RAG_RERANK_TOP_N=50  # Giảm số candidates re-rank
-RAG_RERANKER_MODEL=cross-encoder/ms-marco-TinyBERT-L-2-v2  # Dùng model nhỏ hơn
+python backend/tests/manual/test_conversation_indexer.py   # E2E conversation indexing + retrieval
+python scripts/clear_index.py                              # Clear RAG index
+python scripts/debug_chunks.py                             # Debug chunking
 ```
 
-**Nếu memory cao:**
+**LangSmith eval:** `python scripts/langsmith_evaluate_dataset.py` (cần `LANGSMITH_API_KEY`).
+
+---
+
+## 8. Deploy
+
+Project có sẵn [`langgraph.json`](langgraph.json) và entry [`backend/src/langgraph_platform.py`](backend/src/langgraph_platform.py).
+
 ```bash
-RAG_CACHE_SIZE=500  # Giảm cache size
-RAG_RERANKER_MODEL=cross-encoder/ms-marco-TinyBERT-L-2-v2  # ~50MB thay vì 80MB
+pip install -U langgraph-cli
+langgraph dev                       # Chạy local qua LangGraph runtime
+langgraph up                        # Deploy lên Platform
 ```
 
-**Tắt re-ranking nếu cần:**
-```bash
-RAG_ENABLE_RERANKING=false
-```
+Logging xuất hiện trong Server logs view nếu dùng `logging.getLogger("app.xxx")` (không phải `print()`).
 
-### Monitoring
+---
 
-Check logs khi khởi động để xác nhận cấu hình:
+## 9. Troubleshooting
 
-```
-INFO - Loading cross-encoder model: cross-encoder/ms-marco-MiniLM-L-6-v2
-INFO - Cross-encoder loaded successfully
-INFO - RAG system initialized: hybrid search with re-ranking enabled
-```
+| Vấn đề | Fix |
+|--------|-----|
+| `/ready` trả 503 | Thiếu `GEMINI_API_KEY` / `GROQ_API_KEY` hợp lệ |
+| `MODEL_ERROR` (429) | Provider rate-limit. Stream auto-retry 1 lần |
+| Search không có kết quả | Chưa index. Chạy `python backend/scripts/index_doc.py <path>` |
+| Cross-encoder không load | `pip install sentence-transformers`, hoặc chấp nhận fallback cosine |
+| ChromaDB chậm lần đầu | Tải embedding model. Volumes `hf_cache` cache cho lần sau |
+| Docker không mount `./data` (Windows) | Docker Desktop → Settings → Resources → File sharing |
+| Frontend không kết nối backend | Check `VITE_PROXY_TARGET` (Docker) hoặc `VITE_API_BASE_URL` (local) |
+| Sửa `prompt.md` không có tác dụng | Xoá `__pycache__`. Prompt auto-reload theo mtime, không cần restart |
+| Routing sai | Edit `intent_classifier/skill.yaml` (đặc biệt `corpus_description`). Restart backend (YAML không auto-reload) |
+| Skill không discover | Check log `[SKILLS] loaded <name>`. Folder cần `skill.yaml` + `handler.py` với class `Handler(BaseSkill)` |
+| Log không hiện trên Platform | Dùng `logging.getLogger("app.xxx")` thay vì `print()` |
 
-Xem thêm chi tiết tại:
-- [RAG_SYSTEM_OVERVIEW.md](RAG_SYSTEM_OVERVIEW.md) - Tổng quan về RAG system
-- [backend/src/rag/README.md](backend/src/rag/README.md) - RAG system documentation
-- [backend/src/rag/IMPLEMENTATION_STATUS.md](backend/src/rag/IMPLEMENTATION_STATUS.md) - Implementation status
-- [backend/src/rag/CONVERSATION_INDEXING.md](backend/src/rag/CONVERSATION_INDEXING.md) - Conversation indexing details
+---
+
+## Tài liệu tham khảo
+
+- [backend/src/rag/README.md](backend/src/rag/README.md) — Chi tiết module RAG
+- [docs/architecture/](docs/architecture/) — Sơ đồ, workflow, plan kiến trúc gốc
+- [docs/guides/](docs/guides/) — AI agent guide, beginner guide, tiêu chí agent
+- [docs/changelog/](docs/changelog/) — Changelog
+- [docs/archive/](docs/archive/) — Plan/report đã hoàn thành
+- [.env.example](.env.example), [backend/config/rag.yaml.example](backend/config/rag.yaml.example) — Cấu hình mẫu

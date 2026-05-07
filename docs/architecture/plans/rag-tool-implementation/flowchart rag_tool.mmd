@@ -1,0 +1,116 @@
+flowchart TB
+%% ─────────────────────────────────────────────
+%% INDEXING PIPELINE
+%% ─────────────────────────────────────────────
+subgraph Indexing["🔨 INDEXING PIPELINE"]
+  subgraph ConvFlow["💬 Conversation Input"]
+    Conv["💬 New Message\n(user / assistant)"]
+    ConvSave["1️⃣ Save to SQLite\n+ FTS auto-trigger"]
+    ConvChunk["2️⃣ Chunk nếu dài\n(sentence-based)"]
+    ConvEmbed["3️⃣ Embed chunks\n(EmbeddingModel)"]
+    ConvVec["4️⃣ Store vào VectorStore\n(source=conversation)"]
+  end
+
+  subgraph DocFlow["📄 Document / Code Input"]
+    Docs["📄 Documents\nPDF / DOCX / MD / TXT"]
+    Code["💻 Code Files\nPython / JS / TS / Java"]
+    Load["1️⃣ Document Loader\nĐọc & parse file"]
+    DocChunk["2️⃣ Chunker\nRecursive (~512 chars)\nhoặc Code-Aware"]
+    DocEmbed["3️⃣ Embed chunks\n(EmbeddingModel)"]
+    DocVec["4️⃣ Store vào VectorStore\n(source=document|code)"]
+    DocMeta["5️⃣ Upsert metadata\nvào SQLite documents table"]
+  end
+end
+
+%% ─────────────────────────────────────────────
+%% STORAGE
+%% ─────────────────────────────────────────────
+subgraph Storage["🗄️ STORAGE"]
+  SQLite[("SQLite DB\n─────────────\n📋 messages table\n🔍 messages_fts FTS5\n📁 documents table\n─────────────\n✅ Text gốc\n✅ Metadata\n✅ Keyword search")]
+  VectorDB[("VectorStore\n─────────────\n📦 All embeddings\n🏷️ metadata.source:\n  conversation | document | code\n✅ Semantic search")]
+  CheckpointDB[("checkpoint.db\n─────────────\n🔖 thread_id\n📸 snapshot GraphState\n  sau mỗi node\n🔄 resume nếu lỗi\n⏪ time-travel debug")]
+end
+
+%% ─────────────────────────────────────────────
+%% RETRIEVAL – LangGraph RAG Subgraph
+%% ─────────────────────────────────────────────
+subgraph RAGSubgraph["🤖 RETRIEVAL — LangGraph RAG Subgraph"]
+  UserQuery["👤 User Question"]
+
+  InitState["📥 GraphState khởi tạo\n─────────────────────\nquery ← user input\nrewritten_query: None\ndocuments: []\ngeneration: None\nretry_count: 0"]
+
+  subgraph RetrieveNode["Node 1: retrieve"]
+    HybridSearch["🔀 Hybrid Search\n(FTS weight=0.3 + Vector weight=0.7)\n+ optional Query Expansion\n+ optional Multi-Query"]
+    Citations["🔗 Attach Citations metadata\n[if enable_citations]\n⚠️ cần cho generate_node"]
+    StateAfterRetrieve["🗂️ state.documents ✅ filled\nsearch_query = rewritten_query ?? query"]
+  end
+
+  GradeDocs["Node 2: grade_documents\n🧑‍⚖️ LLM đánh giá từng doc\n─────────────────────\nstate.documents ✅ filtered\n→ relevant / not relevant"]
+  TransformQuery["Node 3: transform_query\n✏️ LLM viết lại câu hỏi\n─────────────────────\nstate.rewritten_query ✅ updated\nstate.retry_count += 1\nstate.documents: []"]
+  Generate["Node 4: generate\n💬 LLM tạo câu trả lời\n─────────────────────\nstate.generation ✅ filled\ndựa trên state.documents"]
+  GradeGen["Node 5: grade_generation\n🧑‍⚖️ LLM kiểm tra\n─────────────────────\ngrounded_and_useful?\nhallucination?\nnot_useful?"]
+  FinalAnswer["✅ Final Answer\n─────────────────────\nstate.generation → answer\nstate.documents → citations\nstate.retry_count (log)"]
+end
+
+%% ─────────────────────────────────────────────
+%% INDEXING FLOWS
+%% ─────────────────────────────────────────────
+Conv --> ConvSave
+ConvSave --> ConvChunk
+ConvChunk --> ConvEmbed
+ConvEmbed --> ConvVec
+ConvSave -->|"FTS trigger"| SQLite
+ConvVec --> VectorDB
+
+Docs --> Load
+Code --> Load
+Load --> DocChunk
+DocChunk --> DocEmbed
+DocEmbed --> DocVec
+DocVec --> VectorDB
+DocEmbed --> DocMeta
+DocMeta --> SQLite
+
+%% ─────────────────────────────────────────────
+%% RETRIEVAL FLOWS
+%% ─────────────────────────────────────────────
+UserQuery --> InitState
+InitState --> RetrieveNode
+HybridSearch -->|"FTS keyword search"| SQLite
+HybridSearch -->|"Vector semantic search"| VectorDB
+SQLite -.->|"FTS results"| HybridSearch
+VectorDB -.->|"Vector results\n(all sources)"| HybridSearch
+
+HybridSearch --> Citations
+Citations --> StateAfterRetrieve
+StateAfterRetrieve --> GradeDocs
+GradeDocs -->|"relevant docs found"| Generate
+GradeDocs -->|"no relevant + retry < 2"| TransformQuery
+GradeDocs -->|"retry exhausted"| Generate
+TransformQuery -->|"loop back"| RetrieveNode
+Generate --> GradeGen
+GradeGen -->|"grounded_and_useful"| FinalAnswer
+GradeGen -->|"hallucination / not_useful\n+ retry < 2"| TransformQuery
+GradeGen -->|"retry exhausted"| FinalAnswer
+
+%% Checkpoint: LangGraph tự động snapshot state sau mỗi node
+InitState -.->|"checkpoint"| CheckpointDB
+StateAfterRetrieve -.->|"checkpoint"| CheckpointDB
+GradeDocs -.->|"checkpoint"| CheckpointDB
+TransformQuery -.->|"checkpoint"| CheckpointDB
+Generate -.->|"checkpoint"| CheckpointDB
+FinalAnswer -.->|"checkpoint"| CheckpointDB
+
+%% ─────────────────────────────────────────────
+%% STYLES
+%% ─────────────────────────────────────────────
+style ConvFlow fill:#e3f2fd,stroke:#90caf9
+style DocFlow fill:#fff3e0,stroke:#ffcc80
+style Storage fill:#f3e5f5,stroke:#ce93d8
+style RAGSubgraph fill:#e8f5e9,stroke:#a5d6a7
+style RetrieveNode fill:#fffde7,stroke:#fff176
+style Indexing fill:#fafafa,stroke:#bdbdbd
+style VectorDB fill:#e8eaf6,stroke:#9fa8da
+style CheckpointDB fill:#fbe9e7,stroke:#ff8a65
+style InitState fill:#e3f2fd,stroke:#90caf9
+style StateAfterRetrieve fill:#fffde7,stroke:#f9a825

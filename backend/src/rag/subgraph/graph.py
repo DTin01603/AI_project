@@ -46,7 +46,6 @@ from rag.subgraph.nodes import (
     transform_query_node,
 )
 from rag.subgraph.state import RAGSubgraphState
-from research_agent.direct_llm import DirectLLM
 
 logger = logging.getLogger(__name__)
 
@@ -72,17 +71,15 @@ class RAGSubgraph:
 
     Usage::
 
-        subgraph = RAGSubgraph(retrieval_node, direct_llm)
+        subgraph = RAGSubgraph(retrieval_node)
         generation, citations, meta = subgraph.run(question, history)
     """
 
     def __init__(
         self,
         retrieval_node: RetrievalNode,
-        direct_llm: DirectLLM,
     ) -> None:
         self._retrieval_node = retrieval_node
-        self._direct_llm = direct_llm
         self._compiled: Any | None = None
 
     # ------------------------------------------------------------------
@@ -97,22 +94,10 @@ class RAGSubgraph:
             "retrieve",
             lambda s: retrieve_node(s, self._retrieval_node),
         )
-        builder.add_node(
-            "grade_documents",
-            lambda s: grade_documents_node(s, self._direct_llm),
-        )
-        builder.add_node(
-            "transform_query",
-            lambda s: transform_query_node(s, self._direct_llm),
-        )
-        builder.add_node(
-            "generate",
-            lambda s: generate_node(s, self._direct_llm),
-        )
-        builder.add_node(
-            "grade_generation",
-            lambda s: grade_generation_node(s, self._direct_llm),
-        )
+        builder.add_node("grade_documents", grade_documents_node)
+        builder.add_node("transform_query", transform_query_node)
+        builder.add_node("generate", generate_node)
+        builder.add_node("grade_generation", grade_generation_node)
 
         # --- edges ---
         builder.set_entry_point("retrieve")
@@ -158,6 +143,7 @@ class RAGSubgraph:
         self,
         question: str,
         history: list[dict[str, str]] | None = None,
+        model: str | None = None,
     ) -> tuple[str, list[str], dict[str, Any]]:
         """Run the agentic RAG pipeline synchronously.
 
@@ -179,6 +165,7 @@ class RAGSubgraph:
         initial_state: RAGSubgraphState = {
             "question": question,
             "history": history or [],
+            "model": model,
             "transformed_query": "",
             "documents": [],
             "relevant_documents": [],

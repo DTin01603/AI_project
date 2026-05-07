@@ -10,15 +10,14 @@ class SSEAdapter:
 
     NODE_EVENT_MAP: dict[str, dict[str, str]] = {
         "entry": {"type": "status", "message": "Đang xử lý câu hỏi..."},
-        "complexity": {"type": "status", "message": "Đang phân tích độ phức tạp..."},
-        "router": {"type": "status", "message": "Đang xác định luồng xử lý..."},
+        "intent": {"type": "status", "message": "Đang phân loại ý định câu hỏi..."},
         "planning": {"type": "status", "message": "Đang lập kế hoạch nghiên cứu..."},
         "research": {"type": "status", "message": "Đang thực hiện nghiên cứu..."},
         "synthesis": {"type": "status", "message": "Đang tổng hợp kết quả..."},
         "citation": {"type": "status", "message": "Đang chuẩn hóa trích dẫn..."},
         "persist": {"type": "status", "message": "Đang lưu hội thoại..."},
-        "simple_llm": {"type": "status", "message": "Đang tạo phản hồi..."},
-        "direct_llm": {"type": "status", "message": "Đang tạo phản hồi..."},
+        "direct_answer": {"type": "status", "message": "Đang tạo phản hồi..."},
+        "local_rag": {"type": "status", "message": "Đang tra cứu tài liệu..."},
         "current_date": {"type": "status", "message": "Đang lấy thông tin ngày hiện tại..."},
     }
 
@@ -28,9 +27,11 @@ class SSEAdapter:
 
     @staticmethod
     def _total_nodes_for_query_type(query_type: str | None) -> int:
-        if query_type == "simple":
+        if query_type == "direct_answer":
             return 4
-        if query_type == "research_intent":
+        if query_type == "local_rag":
+            return 5
+        if query_type == "web_search":
             return 8
         if query_type == "current_date":
             return 5
@@ -85,9 +86,7 @@ class SSEAdapter:
                 "model_runtime": SSEAdapter._extract_model_runtime(final_payload),
             }
 
-            if node_name == "complexity":
-                event["data"] = {"complexity": final_payload.get("complexity_result")}
-            elif node_name == "planning":
+            if node_name == "planning":
                 plan = final_payload.get("research_plan") or []
                 event["data"] = {"tasks": [getattr(task, "query", "") for task in plan], "num_tasks": len(plan)}
             elif node_name == "research":

@@ -1,0 +1,14 @@
+name: direct_answer
+version: 1
+description: Answer the user directly using conversation history (no retrieval)
+# model: null -> falls back to settings.default_model (env DEFAULT_MODEL)
+temperature: 0.1
+max_output_tokens: 1200
+llm: true
+
+# Runtime behavior (read by handler)
+timeout_seconds: 10.0
+max_retries: 2
+max_history_messages: 12
+max_history_chars: 6000
+max_turn_chars: 1200

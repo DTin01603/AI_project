@@ -24,7 +24,10 @@ class AgentState(TypedDict):
     """
 
     messages: Annotated[list[AnyMessage], add_messages]
-    query_type: NotRequired[Literal["simple", "complex", "research_intent", "current_date", "direct_llm"]]
+    query_type: NotRequired[Literal[
+        "direct_answer", "local_rag", "web_search", "current_date",
+        "simple", "complex", "research_intent", "direct_llm",
+    ]]
     complexity_result: NotRequired[dict[str, Any] | None]
     research_plan: NotRequired[list[ResearchTask]]
     research_results: NotRequired[list[ResearchResult]]

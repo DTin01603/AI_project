@@ -7,19 +7,19 @@ from uuid import uuid4
 
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
-from models.request import ChatRequest
+
+from api.schemas.chat import ChatRequest
 from research_agent.config import get_checkpointer
-from research_agent.edges import complexity_edge, router_edge
+from research_agent.edges import intent_edge
 from research_agent.nodes import (
     citation_node,
-    complexity_node,
     current_date_node,
     entry_node,
+    intent_node,
     llm_node,
     persist_conversation_node,
     planning_node,
     research_node,
-    router_node,
     synthesis_node,
 )
 from research_agent.state import AgentState
@@ -37,70 +37,64 @@ class ResearchAgentGraph:
     def _build_graph(self) -> StateGraph:
         graph = StateGraph(AgentState)
 
-        async def _research_node_wrapper(state: AgentState):
-            return await research_node(state, self.dependencies["research_tool"])
-
         graph.add_node("entry", entry_node)
-        graph.add_node("complexity", lambda state: complexity_node(state, self.dependencies["analyzer"]))
-        graph.add_node("router", router_node)
-        graph.add_node("planning", lambda state: planning_node(state, self.dependencies["planning_agent"]))
-        graph.add_node("research", _research_node_wrapper)
+        graph.add_node("intent", intent_node)
+        graph.add_node("planning", planning_node)
+        graph.add_node("research", research_node)
         graph.add_node(
             "synthesis",
-            lambda state: synthesis_node(
-                state,
-                self.dependencies["aggregator"],
-                self.dependencies["response_composer"],
-                self.dependencies["direct_llm"],
-            ),
+            lambda state: synthesis_node(state, self.dependencies["aggregator"]),
         )
         graph.add_node("citation", citation_node)
         graph.add_node(
-            "simple_llm",
+            "local_rag",
             lambda state: llm_node(
                 state,
-                self.dependencies["direct_llm"],
                 self.dependencies["database"],
-                node_name="simple_llm",
-                fallback_answer="Xin lỗi, mình chưa thể tạo phản hồi lúc này.",
+                node_name="local_rag",
+                fallback_answer="Xin lỗi, không tìm thấy thông tin phù hợp trong tài liệu.",
                 retrieval_node=self.dependencies.get("retrieval_node"),
                 rag_subgraph=self.dependencies.get("rag_subgraph"),
             ),
         )
         graph.add_node(
-            "direct_llm",
+            "direct_answer",
             lambda state: llm_node(
                 state,
-                self.dependencies["direct_llm"],
                 self.dependencies["database"],
-                node_name="direct_llm",
-                fallback_answer="Xin lỗi, hệ thống chưa xử lý được yêu cầu này ngay bây giờ.",
-                retrieval_node=self.dependencies.get("retrieval_node"),
-                rag_subgraph=self.dependencies.get("rag_subgraph"),
+                node_name="direct_answer",
+                fallback_answer="Xin lỗi, mình chưa thể tạo phản hồi lúc này.",
+                retrieval_node=None,
+                rag_subgraph=None,
             ),
         )
         graph.add_node("current_date", current_date_node)
-        graph.add_node("persist", lambda state: persist_conversation_node(state, self.dependencies["database"]))
+        graph.add_node(
+            "persist",
+            lambda state: persist_conversation_node(
+                state, self.dependencies["conversation_service"]
+            ),
+        )
 
         graph.set_entry_point("entry")
-        graph.add_edge("entry", "complexity")
-        graph.add_conditional_edges("complexity", complexity_edge, {"simple": "simple_llm", "complex": "router"})
+        graph.add_edge("entry", "intent")
         graph.add_conditional_edges(
-            "router",
-            router_edge,
+            "intent",
+            intent_edge,
             {
-                "research_intent": "planning",
+                "direct_answer": "direct_answer",
+                "local_rag": "local_rag",
+                "web_search": "planning",
                 "current_date": "current_date",
-                "direct_llm": "direct_llm",
             },
         )
         graph.add_edge("planning", "research")
         graph.add_edge("research", "synthesis")
         graph.add_edge("synthesis", "citation")
 
-        graph.add_edge("simple_llm", "persist")
+        graph.add_edge("direct_answer", "persist")
+        graph.add_edge("local_rag", "persist")
         graph.add_edge("current_date", "persist")
-        graph.add_edge("direct_llm", "persist")
         graph.add_edge("citation", "persist")
         graph.add_edge("persist", END)
         return graph

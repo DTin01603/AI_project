@@ -5,6 +5,7 @@ Usage examples:
   python scripts/index_doc.py --file "D:/docs/guide.md"
   python scripts/index_doc.py --file "D:/docs/a.md" --file "D:/docs/b.pdf"
   python scripts/index_doc.py --file "D:/docs/guide.md" --db-path "./data/conversations.db"
+  python backend/scripts/index_doc.py --file "D:/AI_project1/AI_project/tai_lieu.md" --db-path "./data/conversations.db" --vector-store-path "./data/vector_store"
 """
 
 from __future__ import annotations

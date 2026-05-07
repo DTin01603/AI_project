@@ -1,0 +1,10 @@
+name: rag.answer_with_context
+version: 1
+description: Generate a grounded answer from relevant documents + conversation history
+temperature: 0.1
+max_output_tokens: 1200
+llm: true
+
+# Context building params
+max_context_docs: 8
+snippet_max_chars: 800

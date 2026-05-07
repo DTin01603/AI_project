@@ -1,0 +1,9 @@
+name: rag.grade_documents
+version: 1
+description: Grade each retrieved document for relevance to the question
+temperature: 0.0
+max_output_tokens: 500
+llm: true
+
+# Fallback score threshold when LLM parse fails
+fallback_score_threshold: 0.4
