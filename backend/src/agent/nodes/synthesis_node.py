@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.aggregator import Aggregator
+from services.research_aggregation_service import ResearchAggregationService
 from agent.nodes.common import extract_last_message_content
 from agent.state import AgentState
 from agent.utils import get_execution_metadata, node_timing_wrapper
@@ -13,7 +13,7 @@ from skills import get_registry
 @node_timing_wrapper("synthesis")
 def synthesis_node(
     state: AgentState,
-    aggregator: Aggregator,
+    aggregator: ResearchAggregationService,
 ) -> dict[str, Any]:
     """Synthesize research results into final answer via skills."""
     question = extract_last_message_content(state)

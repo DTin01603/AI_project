@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-get_research_agent_graph = importlib.import_module("api.deps").get_research_agent_graph
+get_agent_graph = importlib.import_module("api.deps").get_agent_graph
 create_app = importlib.import_module("main").create_app
 
 
@@ -53,7 +53,7 @@ def _stream_data_lines(client: TestClient, payload: dict[str, object]) -> tuple[
 
 def _build_app_client(fake_graph: FakeGraph) -> TestClient:
     app = create_app()
-    app.dependency_overrides[get_research_agent_graph] = lambda: fake_graph
+    app.dependency_overrides[get_agent_graph] = lambda: fake_graph
     return TestClient(app)
 
 

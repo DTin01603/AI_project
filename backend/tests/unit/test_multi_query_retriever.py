@@ -8,7 +8,7 @@ src_path = Path(__file__).parent.parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from rag.fts_engine import SearchResult
-from rag.multi_query_retriever import MultiQueryRetriever
+from services.multi_query_service import MultiQueryRetriever
 
 
 def _fake_search(query: str, top_k: int, min_score: float, filters: dict | None):

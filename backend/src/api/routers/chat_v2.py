@@ -9,9 +9,9 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from api.deps import get_research_agent_graph
+from api.deps import get_agent_graph
 from api.schemas.chat import ChatRequest, ChatResponse, ResponseError, ResponseMeta
-from agent.graph import ResearchAgentGraph
+from agent.graph import AgentGraph
 from agent.streaming import SSEAdapter
 
 try:
@@ -48,7 +48,7 @@ def _map_execution_error(error: Exception) -> tuple[str, str]:
 async def run_chat_v2_non_stream(
     payload: ChatRequest,
     request_id: str,
-    graph: ResearchAgentGraph,
+    graph: AgentGraph,
 ) -> ChatResponse:
     """Run LangGraph request and map final state to ChatResponse."""
     try:
@@ -98,7 +98,7 @@ async def run_chat_v2_non_stream(
     )
 
 
-async def _stream_response(payload: ChatRequest, request_id: str, graph: ResearchAgentGraph):
+async def _stream_response(payload: ChatRequest, request_id: str, graph: AgentGraph):
     max_attempts = 2
     attempt = 1
 
@@ -181,7 +181,7 @@ async def chat_v2(
     request: Request,
     response: Response,
     stream: bool = Query(default=False),
-    graph: ResearchAgentGraph = Depends(get_research_agent_graph),
+    graph: AgentGraph = Depends(get_agent_graph),
 ):
     """LangGraph-based chat endpoint supporting stream and non-stream modes."""
     request_id = request.headers.get("x-request-id") or str(uuid4())

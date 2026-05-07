@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from agent.resilience import call_with_retry, with_timeout
+from agent.utils.resilience import call_with_retry, with_timeout
 from skills._base import BaseSkill
 from skills._errors import SkillValidationError
 from skills._prompt_loader import render

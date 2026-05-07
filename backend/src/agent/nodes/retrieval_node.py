@@ -20,9 +20,9 @@ from rag.config import RAGConfig
 from rag.contextual_compressor import ContextualCompressor
 from rag.citation_tracker import CitationTracker
 from rag.fts_engine import FTSEngine, SearchResult
-from rag.hybrid_search import HybridSearchEngine
+from services.hybrid_search_service import HybridSearchEngine
 from rag.metrics import RAGMetrics, get_metrics
-from rag.multi_query_retriever import MultiQueryRetriever
+from services.multi_query_service import MultiQueryRetriever
 from rag.query_expander import QueryExpander
 from rag.reranker import ReRanker
 from rag.vector_store import ChromaVectorStore, VectorStore, build_conversation_collection_name

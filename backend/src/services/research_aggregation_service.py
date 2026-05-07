@@ -3,7 +3,7 @@ from __future__ import annotations
 from agent.models import ResearchResult
 
 
-class Aggregator:
+class ResearchAggregationService:
     def __init__(self, timeout_seconds: float = 3.0) -> None:
         self.timeout_seconds = timeout_seconds
 

@@ -11,7 +11,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from api.deps import _build_orchestrator_dependencies
-from agent.graph.research_agent_graph import ResearchAgentGraph
+from agent.graph.agent_graph import AgentGraph
 
 logger = logging.getLogger("langgraph.platform")
 if not logger.handlers:
@@ -24,7 +24,7 @@ if not logger.handlers:
 def create_graph() -> Any:
     """Build a compiled graph target for LangGraph Platform deployment."""
     deps = _build_orchestrator_dependencies()
-    runner = ResearchAgentGraph(
+    runner = AgentGraph(
         dependencies={
             "database": deps.database,
             "retrieval_node": deps.retrieval_node,

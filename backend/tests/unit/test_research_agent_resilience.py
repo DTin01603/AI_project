@@ -1,7 +1,7 @@
 import pytest
 import time
 
-from agent.resilience import call_with_retry, with_timeout
+from agent.utils.resilience import call_with_retry, with_timeout
 
 
 def test_call_with_retry_succeeds_after_retry() -> None:

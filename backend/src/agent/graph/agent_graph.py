@@ -23,7 +23,7 @@ from agent.nodes.synthesis_node import synthesis_node
 from agent.state import AgentState
 
 
-class ResearchAgentGraph:
+class AgentGraph:
     """LangGraph runtime for research agent v2."""
 
     def __init__(self, dependencies: dict[str, Any]) -> None:

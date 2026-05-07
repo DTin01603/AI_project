@@ -1,5 +1,5 @@
 """Graph builders and runtime for merged research agent."""
 
-from agent.graph.research_agent_graph import ResearchAgentGraph
+from agent.graph.agent_graph import AgentGraph
 
-__all__ = ["ResearchAgentGraph"]
+__all__ = ["AgentGraph"]

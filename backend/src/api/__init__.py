@@ -1,3 +1,3 @@
-from api.deps import get_research_agent_graph
+from api.deps import get_agent_graph
 
-__all__ = ["get_research_agent_graph"]
+__all__ = ["get_agent_graph"]

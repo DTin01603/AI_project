@@ -30,7 +30,7 @@ from repositories.citation_repo import CitationRepository
 from repositories.conversation_repo import ConversationRepository
 from repositories.document_repo import DocumentRepository
 from repositories.message_repo import MessageRepository
-from agent.aggregator import Aggregator
+from services.research_aggregation_service import ResearchAggregationService
 from agent.database import Database
 from services.citation_service import CitationService
 from services.conversation_indexing_service import ConversationIndexingService
@@ -38,7 +38,7 @@ from services.conversation_service import ConversationService
 
 if TYPE_CHECKING:
     from agent.subgraph import RAGSubgraph
-    from agent.graph import ResearchAgentGraph
+    from agent.graph import AgentGraph
 
 DEFAULT_DB_PATH = "./data/conversations.db"
 _SKILLS_ROOT = Path(__file__).resolve().parent.parent / "skills"
@@ -49,7 +49,7 @@ class GraphDependencies:
     database: ConversationIndexer
     retrieval_node: RetrievalNode
     rag_subgraph: "RAGSubgraph"
-    aggregator: Aggregator
+    aggregator: ResearchAggregationService
     conversation_service: ConversationService
 
 
@@ -142,17 +142,17 @@ class AppContainer:
             database=self.conversation_database_shim,
             retrieval_node=self.retrieval_node,
             rag_subgraph=self.rag_subgraph,
-            aggregator=Aggregator(),
+            aggregator=ResearchAggregationService(),
             conversation_service=self.conversation_service,
         )
 
     @cached_property
-    def research_agent_graph(self) -> "ResearchAgentGraph":
-        from agent.graph import ResearchAgentGraph
+    def agent_graph(self) -> "AgentGraph":
+        from agent.graph import AgentGraph
 
         deps = self.graph_dependencies()
         self._ensure_skills_discovered(retrieval_node=deps.retrieval_node)
-        return ResearchAgentGraph(
+        return AgentGraph(
             dependencies={
                 "database": deps.database,
                 "retrieval_node": deps.retrieval_node,
@@ -187,9 +187,9 @@ def get_container() -> AppContainer:
     return AppContainer()
 
 
-def get_research_agent_graph() -> ResearchAgentGraph:
+def get_agent_graph() -> AgentGraph:
     """Backwards-compat helper — used by chat router and existing imports."""
-    return get_container().research_agent_graph
+    return get_container().agent_graph
 
 
 __all__ = [
@@ -197,5 +197,5 @@ __all__ = [
     "DEFAULT_DB_PATH",
     "GraphDependencies",
     "get_container",
-    "get_research_agent_graph",
+    "get_agent_graph",
 ]

@@ -20,9 +20,7 @@ from .document_loader import (
 )
 from .embedding import EmbeddingModel, OpenAIEmbedding, SentenceTransformerEmbedding
 from .fts_engine import FTSEngine, SearchResult
-from .hybrid_search import HybridSearchEngine
 from .metrics import RAGMetrics, RetrievalMetrics, get_metrics, reset_metrics
-from .multi_query_retriever import MultiQueryResult, MultiQueryRetriever
 from .query_expander import QueryExpander
 from .reranker import ReRanker
 from .vector_store import ChromaVectorStore, VectorStore
@@ -58,10 +56,7 @@ __all__ = [
     "SearchResult",
     "VectorStore",
     "ChromaVectorStore",
-    "HybridSearchEngine",
     "QueryExpander",
-    "MultiQueryRetriever",
-    "MultiQueryResult",
     "ReRanker",
     "RAGMetrics",
     "RetrievalMetrics",

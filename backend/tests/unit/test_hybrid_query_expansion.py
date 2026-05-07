@@ -9,7 +9,7 @@ sys.path.insert(0, str(src_path))
 
 from rag.embedding import EmbeddingModel
 from rag.fts_engine import SearchResult
-from rag.hybrid_search import HybridSearchEngine
+from services.hybrid_search_service import HybridSearchEngine
 from rag.query_expander import QueryExpander
 from rag.vector_store import VectorStore
 
