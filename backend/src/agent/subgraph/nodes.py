@@ -27,19 +27,24 @@ def retrieve_node(
     state: dict[str, Any],
     retrieval_node: RetrievalNode,
 ) -> dict[str, Any]:
-    """Execute hybrid retrieval via rag.retrieve skill."""
+    """Execute hybrid retrieval via rag.retrieve skill.
+
+    The skill needs the underlying ``RetrievalService`` (not the LangGraph
+    adapter), so we pull it off the node when wiring the registry. The node
+    is still passed in because graph construction already injects it.
+    """
     query = state.get("transformed_query") or state["question"]
+    service = retrieval_node.service
     try:
         skill = get_registry().get("rag.retrieve")
-        # Inject retrieval_node if not already injected
-        if skill.retrieval_node is None:
-            skill.retrieval_node = retrieval_node
+        if skill.service is None:
+            skill.service = service
         out = skill.invoke({"query": query})
         return {"documents": out["documents"]}
     except SkillNotFoundError:
-        logger.warning("rag.retrieve skill not found — using RetrievalNode directly")
+        logger.warning("rag.retrieve skill not found — using RetrievalService directly")
         try:
-            docs = retrieval_node.retrieve(
+            docs = service.retrieve(
                 query=query,
                 method="hybrid",
                 top_k=8,
@@ -64,7 +69,12 @@ def retrieve_node(
 # ---------------------------------------------------------------------------
 
 def grade_documents_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Grade each document for relevance via rag.grade_documents skill."""
+    """Grade each document for relevance via rag.grade_documents skill.
+
+    Fallback policy on grader failure: keep documents whose retrieval score
+    clears a threshold. This is a heuristic, not a silent pass — the
+    ``grade_fallback_used`` flag records that the LLM grader was bypassed.
+    """
     docs = state.get("documents") or []
     if not docs:
         return {"relevant_documents": []}
@@ -77,10 +87,17 @@ def grade_documents_node(state: dict[str, Any]) -> dict[str, Any]:
         )
         return {"relevant_documents": out["relevant_documents"]}
     except SkillNotFoundError:
-        return {"relevant_documents": [d for d in docs if d.get("score", 0) >= 0.4]}
+        logger.warning("rag.grade_documents skill not registered — falling back to score threshold")
+        return {
+            "relevant_documents": [d for d in docs if d.get("score", 0) >= 0.4],
+            "grade_fallback_used": True,
+        }
     except Exception:
-        logger.exception("grade_documents_node failed")
-        return {"relevant_documents": [d for d in docs if d.get("score", 0) >= 0.4]}
+        logger.exception("grade_documents_node failed — falling back to score threshold")
+        return {
+            "relevant_documents": [d for d in docs if d.get("score", 0) >= 0.4],
+            "grade_fallback_used": True,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +158,14 @@ def generate_node(state: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def grade_generation_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Verify the generation via rag.grade_generation skill."""
+    """Verify the generation via rag.grade_generation skill.
+
+    Fallback policy on grader failure: return ``"not_useful"`` rather than
+    silently accepting. The retry loop in ``decide_after_generation_grade``
+    will then either retry with a transformed query or — if the budget is
+    exhausted — accept the answer with ``grade_fallback_used`` recorded so
+    the silent-pass is observable downstream.
+    """
     question = state["question"]
     generation = state.get("generation") or ""
     context_docs = state.get("relevant_documents") or state.get("documents") or []
@@ -154,7 +178,8 @@ def grade_generation_node(state: dict[str, Any]) -> dict[str, Any]:
         )
         return {"generation_grade": out["grade"]}
     except SkillNotFoundError:
-        return {"generation_grade": "grounded_and_useful"}
+        logger.warning("rag.grade_generation skill not registered — defaulting to not_useful")
+        return {"generation_grade": "not_useful", "grade_fallback_used": True}
     except Exception:
-        logger.exception("grade_generation_node failed")
-        return {"generation_grade": "grounded_and_useful"}
+        logger.exception("grade_generation_node failed — defaulting to not_useful")
+        return {"generation_grade": "not_useful", "grade_fallback_used": True}

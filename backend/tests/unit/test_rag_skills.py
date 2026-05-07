@@ -114,14 +114,17 @@ def test_grade_generation_invalid_value_defaults_to_grounded() -> None:
     assert out["grade"] == "grounded_and_useful"
 
 
-def test_grade_generation_failopen_on_adapter_error() -> None:
+def test_grade_generation_returns_not_useful_on_adapter_error() -> None:
+    # When the grader call fails, the skill must NOT silently accept the
+    # answer. Returning "not_useful" lets the subgraph retry via
+    # transform_query (or give up cleanly when retries are exhausted).
     skill = _load_skill("rag.grade_generation", _StubAdapter(raise_exc=RuntimeError("x")))
     out = skill.invoke({
         "question": "Q",
         "generation": "A",
         "context_docs": [{"content": "doc"}],
     })
-    assert out["grade"] == "grounded_and_useful"
+    assert out["grade"] == "not_useful"
 
 
 # ---------- rag.answer_with_context ----------

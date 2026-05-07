@@ -199,5 +199,6 @@ class RAGSubgraph:
             "relevant_hits": len(result.get("relevant_documents") or []),
             "retry_count": result.get("retry_count", 0),
             "grade": result.get("generation_grade", ""),
+            "grade_fallback_used": bool(result.get("grade_fallback_used", False)),
         }
         return generation, citations, metadata

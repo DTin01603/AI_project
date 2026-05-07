@@ -30,7 +30,9 @@ class Handler(BaseSkill):
 
     def invoke(self, inputs_dict: dict[str, Any], *, model_override: str | None = None) -> dict[str, Any]:
         inputs = self._validate_inputs(inputs_dict)
-        # No context → cannot verify grounding; fail open
+        # No context to verify against — accepting is the only sensible
+        # outcome. A "not_useful" verdict here would loop transform_query
+        # forever without any retrieval to improve.
         if not inputs.context_docs:
             return self._validate_outputs({"grade": "grounded_and_useful"}).model_dump()
 
@@ -68,5 +70,8 @@ class Handler(BaseSkill):
         except SkillValidationError:
             raise
         except Exception:
-            # Fail open: accept on error
-            return self._validate_outputs({"grade": "grounded_and_useful"}).model_dump()
+            # Grader call failed — return "not_useful" so the subgraph can
+            # retry via transform_query. The retry budget caps the loop;
+            # silently returning "grounded_and_useful" would mask grader
+            # outages and ship unverified answers.
+            return self._validate_outputs({"grade": "not_useful"}).model_dump()

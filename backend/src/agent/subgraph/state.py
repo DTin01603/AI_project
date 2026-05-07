@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 
 class RAGSubgraphState(TypedDict):
@@ -25,6 +25,11 @@ class RAGSubgraphState(TypedDict):
             Used as a loop guard — should not exceed MAX_RETRIES (2).
         generation_grade: Verdict from the grade_generation node.
             One of: "grounded_and_useful" | "hallucination" | "not_useful".
+        grade_fallback_used: True when grade_documents or grade_generation
+            had to bypass the LLM grader (skill missing or exception). Set
+            so callers can distinguish a real "grounded_and_useful" verdict
+            from an answer that was accepted only because the grader was
+            unavailable.
     """
 
     question: str
@@ -37,3 +42,4 @@ class RAGSubgraphState(TypedDict):
     citations: list[str]
     retry_count: int
     generation_grade: str
+    grade_fallback_used: NotRequired[bool]
