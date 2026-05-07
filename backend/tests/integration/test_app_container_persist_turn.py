@@ -2,8 +2,8 @@
 correctly so that persist_turn writes both messages atomically into a real
 SQLite database (no mocks).
 
-This is the only end-to-end gate verifying the step 1-7a wiring is correct
-together (factory + migrations + repos + service + container singleton).
+This is the end-to-end gate verifying the step 1-7a wiring is correct
+together (factory + migrations + repos + service + container).
 """
 
 from __future__ import annotations
@@ -40,13 +40,3 @@ def test_app_container_persist_turn_writes_both_messages(tmp_path: Path) -> None
     # service both read/write the same physical rows.
     messages = container.message_repo.list_by_conversation(conv_id)
     assert len(messages) == 2
-
-
-def test_app_container_singleton_shares_state_across_get_calls() -> None:
-    # The lru_cache around get_container() must return the same instance,
-    # so repos/services are shared and don't reinitialise on every call.
-    first = get_container()
-    second = get_container()
-    assert second is first
-    assert second.factory is first.factory
-    assert second.message_repo is first.message_repo

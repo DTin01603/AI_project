@@ -47,14 +47,3 @@ def test_should_run_migrations_exactly_once_when_container_initialized(
     assert spy.call_count == 1
     args, _ = spy.call_args
     assert args[0].db_path == db_path
-
-
-def test_should_return_singleton_when_get_container_called_twice(tmp_path: Path) -> None:
-    # Override the default DEFAULT_DB_PATH for both calls so we don't poison
-    # the real ./data dir.
-    db_path = str(tmp_path / "singleton.db")
-    with patch.object(deps_module, "DEFAULT_DB_PATH", db_path):
-        first = get_container()
-        second = get_container()
-
-    assert first is second

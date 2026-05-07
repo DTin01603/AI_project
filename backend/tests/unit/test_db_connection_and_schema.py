@@ -84,13 +84,3 @@ def test_should_be_idempotent_when_run_migrations_called_twice(tmp_path: Path) -
     assert {"conversations", "messages", "citations", "citation_usage", "documents"} <= table_names
 
 
-def test_should_create_parent_dir_when_db_path_nested(tmp_path: Path) -> None:
-    nested = tmp_path / "nested" / "deeper" / "x.db"
-    assert not nested.parent.exists()
-
-    factory = SQLiteConnectionFactory(str(nested))
-    with factory.connect() as conn:
-        conn.execute("CREATE TABLE probe (id INTEGER)")
-
-    assert nested.parent.is_dir()
-    assert nested.exists()

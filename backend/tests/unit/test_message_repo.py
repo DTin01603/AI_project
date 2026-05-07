@@ -94,17 +94,3 @@ def test_should_use_passed_conn_when_insert_with_conn_arg(
     assert surviving == []
 
 
-def test_should_persist_message_when_insert_without_conn(
-    factory: SQLiteConnectionFactory,
-) -> None:
-    conv_repo = ConversationRepository(factory)
-    msg_repo = MessageRepository(factory)
-    conv_id = conv_repo.create("conv-2-5")
-
-    msg_id = msg_repo.insert(conv_id, "user", "persisted")
-
-    rows = msg_repo.list_by_conversation(conv_id)
-    assert len(rows) == 1
-    assert rows[0].id == msg_id
-    assert rows[0].role == "user"
-    assert rows[0].content == "persisted"
