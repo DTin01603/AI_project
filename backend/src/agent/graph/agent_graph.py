@@ -117,9 +117,11 @@ class AgentGraph:
     @staticmethod
     def _initial_state(payload: ChatRequest, request_id: str | None = None) -> AgentState:
         conversation_id = payload.conversation_id or str(uuid4())
+        # query_type is intentionally absent: intent_node sets it before
+        # intent_edge reads it. intent_edge defends against a missing value
+        # by routing to direct_answer.
         return {
             "messages": [HumanMessage(content=payload.message)],
-            "query_type": "simple",
             "research_plan": [],
             "research_results": [],
             "citations": [],

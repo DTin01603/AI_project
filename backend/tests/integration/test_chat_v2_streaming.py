@@ -61,7 +61,7 @@ def _simple_success_updates() -> list[dict[str, dict[str, object]]]:
     return [
         {
             "entry": {
-                "query_type": "simple",
+                "query_type": "direct_answer",
                 "execution_metadata": {
                     "request_id": "req-1",
                     "conversation_id": "conv-1",
@@ -71,7 +71,7 @@ def _simple_success_updates() -> list[dict[str, dict[str, object]]]:
         },
         {
             "simple_llm": {
-                "query_type": "simple",
+                "query_type": "direct_answer",
                 "final_answer": "Xin chào",
                 "citations": [],
                 "execution_metadata": {

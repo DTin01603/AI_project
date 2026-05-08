@@ -12,8 +12,8 @@ class AgentState(TypedDict):
 
     Fields:
         messages: Conversation history accumulated with LangGraph `add_messages` reducer.
-        query_type: Routing classifier for execution path selection.
-        complexity_result: Raw complexity analysis payload.
+        query_type: Routing classifier — one of the four branches that
+            ``intent_edge`` can dispatch to.
         research_plan: Ordered list of research tasks created by planning node.
         research_results: Collected outputs from research execution.
         final_answer: Final answer text generated for the user.
@@ -24,11 +24,9 @@ class AgentState(TypedDict):
     """
 
     messages: Annotated[list[AnyMessage], add_messages]
-    query_type: NotRequired[Literal[
-        "direct_answer", "local_rag", "web_search", "current_date",
-        "simple", "complex", "research_intent", "direct_llm",
-    ]]
-    complexity_result: NotRequired[dict[str, Any] | None]
+    query_type: NotRequired[
+        Literal["direct_answer", "local_rag", "web_search", "current_date"]
+    ]
     research_plan: NotRequired[list[ResearchTask]]
     research_results: NotRequired[list[ResearchResult]]
     final_answer: NotRequired[str]
