@@ -13,7 +13,7 @@ sys.path.insert(0, str(src_path))
 from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
-from _helpers import TestDb
+from _helpers import SeedDb
 from services.retrieval_service import RetrievalService
 
 
@@ -24,7 +24,7 @@ def _build_node(db_path: str, config: RAGConfig) -> RetrievalNode:
 
 def test_retrieval_node_hybrid_method_end_to_end(tmp_path: Path):
     db_path = str(tmp_path / "hybrid.db")
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
 
     conv = db.create_conversation()
     db.save_message(conv, "user", "How to deploy with Docker?")
@@ -41,7 +41,7 @@ def test_retrieval_node_hybrid_method_end_to_end(tmp_path: Path):
 
 def test_retrieval_node_vector_method_explicit(tmp_path: Path):
     db_path = str(tmp_path / "vector.db")
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
 
     conv = db.create_conversation()
     db.save_message(conv, "user", "JWT authentication for API")

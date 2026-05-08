@@ -12,7 +12,7 @@ from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from services.hybrid_search_service import HybridSearchEngine
 from rag.vector_store import ChromaVectorStore
-from _helpers import TestDb
+from _helpers import SeedDb
 
 
 def _setup_db() -> tuple[str, FTSEngine]:
@@ -20,7 +20,7 @@ def _setup_db() -> tuple[str, FTSEngine]:
     db_path = temp.name
     temp.close()
 
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
     conv = db.create_conversation()
     db.save_message(conv, "user", "deploy with docker compose")
     db.save_message(conv, "assistant", "oauth2 authentication flow")
@@ -35,7 +35,7 @@ def test_hybrid_search_returns_ranked_results(tmp_path: Path):
     store = ChromaVectorStore(persist_directory=str(tmp_path / "vs"))
 
     # Bootstrap vector store from DB messages for test simplicity.
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
     with db._connect() as conn:
         rows = conn.execute("SELECT id, content, conversation_id, role, created_at FROM messages").fetchall()
 
@@ -65,7 +65,7 @@ def test_hybrid_search_deduplicates_results(tmp_path: Path):
     embedder = SentenceTransformerEmbedding(dimension=16)
     store = ChromaVectorStore(persist_directory=str(tmp_path / "vs"))
 
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
     with db._connect() as conn:
         rows = conn.execute("SELECT id, content FROM messages").fetchall()
 

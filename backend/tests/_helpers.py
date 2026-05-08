@@ -1,9 +1,12 @@
-"""Shared test helpers (test infra only — not production code).
+﻿"""Shared test helpers (test infra only â€” not production code).
 
 Tests historically used `Database(db_path).save_message(...)` to seed
 fixture data. After the Database shim was removed, equivalent setup
 needs `SQLiteConnectionFactory + run_migrations + repos`, which is too
 verbose to inline in every test. The helper below packages that boilerplate.
+
+Class is named ``SeedDb`` (not ``TestDb``) because pytest treats classes
+prefixed with ``Test`` as test classes and emits a collection warning.
 """
 
 from __future__ import annotations
@@ -14,10 +17,10 @@ from repositories.conversation_repo import ConversationRepository
 from repositories.message_repo import MessageRepository
 
 
-class TestDb:
+class SeedDb:
     """Lightweight fixture wrapper for seeding conversation+message rows.
 
-    NOT a production type — only used to keep test setup short. Deliberately
+    NOT a production type â€” only used to keep test setup short. Deliberately
     avoids implementing higher-level service operations: tests that need
     transactional behaviour should build a real ConversationService.
     """
@@ -41,5 +44,13 @@ class TestDb:
     def get_conversation_history(self, conversation_id: str) -> list[dict[str, str]]:
         return self.messages.history_dicts(conversation_id)
 
+    def _connect(self):
+        """Direct connection access for tests that need raw SQL.
 
-__all__ = ["TestDb"]
+        Mirrors the legacy ``Database._connect`` API. Use sparingly â€” most
+        tests should go through repos/services instead.
+        """
+        return self.factory.connect()
+
+
+__all__ = ["SeedDb"]

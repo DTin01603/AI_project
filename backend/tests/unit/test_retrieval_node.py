@@ -15,7 +15,7 @@ from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from services.retrieval_service import RetrievalService
-from _helpers import TestDb
+from _helpers import SeedDb
 
 
 def _build_node(fts_engine, config: RAGConfig) -> RetrievalNode:
@@ -33,7 +33,7 @@ def temp_db():
     """Create a temporary database for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = str(Path(tmpdir) / "test.db")
-        db = TestDb(db_path)
+        db = SeedDb(db_path)
 
         conv_id = db.create_conversation()
         db.save_message(conv_id, "user", "How do I deploy my application?")

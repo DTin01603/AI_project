@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
 # Import RAG modules
-from _helpers import TestDb
+from _helpers import SeedDb
 from rag.fts_engine import FTSEngine
 from rag.config import RAGConfig
 from agent.nodes.retrieval_node import RetrievalNode
@@ -34,7 +34,7 @@ def test_app_with_data():
         db_path = f.name
     
     # Create database and add test data
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
     conversation_id = db.create_conversation()
     
     # Add diverse test messages for comprehensive testing

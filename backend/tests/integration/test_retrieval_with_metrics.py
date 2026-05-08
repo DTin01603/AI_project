@@ -14,7 +14,7 @@ from rag.config import RAGConfig
 from rag.fts_engine import FTSEngine
 from rag.metrics import RAGMetrics, reset_metrics
 from agent.nodes.retrieval_node import RetrievalNode
-from _helpers import TestDb
+from _helpers import SeedDb
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def temp_db():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
 
     # Add some test messages
     conversation_id = db.create_conversation()

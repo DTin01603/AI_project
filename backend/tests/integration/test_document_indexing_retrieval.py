@@ -14,7 +14,7 @@ from rag.embedding import SentenceTransformerEmbedding
 from rag.fts_engine import FTSEngine
 from agent.nodes.retrieval_node import RetrievalNode
 from rag.vector_store import ChromaVectorStore
-from _helpers import TestDb
+from _helpers import SeedDb
 from repositories.document_repo import DocumentRepository
 from services.document_indexing_service import DocumentIndexingService
 from services.retrieval_service import RetrievalService
@@ -22,7 +22,7 @@ from services.retrieval_service import RetrievalService
 
 def test_document_indexing_and_source_filtering(tmp_path: Path):
     db_path = str(tmp_path / "rag.db")
-    db = TestDb(db_path)
+    db = SeedDb(db_path)
 
     conversation_id = db.create_conversation()
     db.save_message(conversation_id, "user", "How to deploy using docker compose?")
