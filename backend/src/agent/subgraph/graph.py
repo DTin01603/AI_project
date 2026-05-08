@@ -26,7 +26,7 @@ Flow
       ├─ grounded_and_useful ──────────────────→ END
       └─ hallucination | not_useful + budget left ─→ transform_query ─→ retrieve
 
-Maximum refinement loops: MAX_RETRIES = 2 (see edges.py).
+Maximum refinement loops: MAX_RETRIES = 8 (see edges.py).
 """
 
 from __future__ import annotations

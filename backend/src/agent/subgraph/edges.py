@@ -5,7 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 MAX_RETRIES: int = 8
-"""Maximum number of query-transformation retries before forcing generation."""
+"""Maximum number of query-transformation retries before forcing generation.
+
+Set high to favour retrieval recall on hard questions: each retry runs
+transform_query → retrieve → grade_documents → (optionally) generate →
+grade_generation, so the worst-case latency cost is real, but for an
+internal-document RAG the accuracy gain from extra rewrite attempts
+outweighs the latency hit.
+
+If retry distribution telemetry shows the budget rarely fires past
+2-3 in practice, this can drop without losing recall.
+"""
 
 
 def decide_to_generate(state: dict[str, Any]) -> str:
