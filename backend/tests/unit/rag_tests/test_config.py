@@ -17,10 +17,8 @@ class TestRAGConfig:
         config = RAGConfig()
 
         assert config.db_path == "data/rag.db"
-        assert config.embedding_provider == "sentence-transformers"
         assert config.embedding_model == "paraphrase-multilingual-MiniLM-L12-v2"
         assert config.embedding_dimension == 384
-        assert config.vector_store_type == "chroma"
         assert config.default_search_method == "hybrid"
         assert config.fts_weight == 0.3
         assert config.vector_weight == 0.7
@@ -31,10 +29,8 @@ class TestRAGConfig:
         """Test creating config with custom values."""
         config = RAGConfig(
             db_path="custom.db",
-            embedding_provider="openai",
             embedding_model="text-embedding-3-small",
             embedding_dimension=1536,
-            vector_store_type="faiss",
             default_search_method="vector",
             fts_weight=0.4,
             vector_weight=0.6,
@@ -43,10 +39,8 @@ class TestRAGConfig:
         )
 
         assert config.db_path == "custom.db"
-        assert config.embedding_provider == "openai"
         assert config.embedding_model == "text-embedding-3-small"
         assert config.embedding_dimension == 1536
-        assert config.vector_store_type == "faiss"
         assert config.default_search_method == "vector"
         assert config.fts_weight == 0.4
         assert config.vector_weight == 0.6
@@ -100,13 +94,12 @@ class TestLoadConfig:
 
         assert isinstance(config, RAGConfig)
         assert config.db_path == "data/rag.db"
-        assert config.embedding_provider == "sentence-transformers"
+        assert config.embedding_model == "paraphrase-multilingual-MiniLM-L12-v2"
 
     def test_load_from_yaml(self):
         """Test loading config from YAML file."""
         yaml_content = {
             "db_path": "yaml_test.db",
-            "embedding_provider": "openai",
             "embedding_model": "text-embedding-3-small",
             "embedding_dimension": 1536,
             "default_top_k": 10,
@@ -122,7 +115,6 @@ class TestLoadConfig:
             config = load_config(yaml_path)
 
             assert config.db_path == "yaml_test.db"
-            assert config.embedding_provider == "openai"
             assert config.embedding_model == "text-embedding-3-small"
             assert config.embedding_dimension == 1536
             assert config.default_top_k == 10
@@ -134,7 +126,7 @@ class TestLoadConfig:
     def test_load_from_env(self, monkeypatch):
         """Test loading config from environment variables."""
         monkeypatch.setenv("RAG_DB_PATH", "env_test.db")
-        monkeypatch.setenv("RAG_EMBEDDING_PROVIDER", "openai")
+        monkeypatch.setenv("RAG_EMBEDDING_MODEL", "BAAI/bge-small-en")
         monkeypatch.setenv("RAG_EMBEDDING_DIMENSION", "1536")
         monkeypatch.setenv("RAG_DEFAULT_TOP_K", "15")
         monkeypatch.setenv("RAG_FTS_WEIGHT", "0.25")
@@ -144,7 +136,7 @@ class TestLoadConfig:
         config = load_config()
 
         assert config.db_path == "env_test.db"
-        assert config.embedding_provider == "openai"
+        assert config.embedding_model == "BAAI/bge-small-en"
         assert config.embedding_dimension == 1536
         assert config.default_top_k == 15
         assert config.fts_weight == 0.25
@@ -155,7 +147,7 @@ class TestLoadConfig:
         """Test that environment variables override YAML config."""
         yaml_content = {
             "db_path": "yaml.db",
-            "embedding_provider": "sentence-transformers",
+            "embedding_model": "all-MiniLM-L6-v2",
             "default_top_k": 5,
         }
 
@@ -171,7 +163,7 @@ class TestLoadConfig:
 
             assert config.db_path == "env.db"
             assert config.default_top_k == 20
-            assert config.embedding_provider == "sentence-transformers"
+            assert config.embedding_model == "all-MiniLM-L6-v2"
         finally:
             os.unlink(yaml_path)
 
