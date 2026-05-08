@@ -43,7 +43,14 @@ def update_node_timing(
 
 
 def node_timing_wrapper(node_name: str) -> Callable:
-    """Decorator that times a node function and merges the timing into execution_metadata."""
+    """Decorator that times a node function and merges the timing into execution_metadata.
+
+    The wrapped node returns a state-update dict that may already contain its
+    own ``execution_metadata`` payload (e.g. ``persistence`` from
+    persist_conversation_node). Read that back from ``result`` first, then
+    fall back to ``state`` — otherwise the timing merge would clobber the
+    fields the node just set.
+    """
 
     def decorator(func: Callable) -> Callable:
         def wrapper(state: AgentState, *args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -51,7 +58,12 @@ def node_timing_wrapper(node_name: str) -> Callable:
                 result = func(state, *args, **kwargs)
             if not isinstance(result, dict):
                 result = {}
-            metadata = get_execution_metadata(state)
+            existing = result.get("execution_metadata")
+            if isinstance(existing, dict):
+                metadata = existing
+                metadata.setdefault("node_timings", {})
+            else:
+                metadata = get_execution_metadata(state)
             metadata = update_node_timing(metadata, node_name, timer.elapsed_ms)
             result["execution_metadata"] = metadata
             return result
